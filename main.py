@@ -231,8 +231,8 @@ async def minesweeper(ctx):
 
     # Cooldown 5 Minuten
     last = minesweeper_cooldowns.get(user_id, 0)
-    if now - last < 300:
-        remain = int(300 - (now - last))
+    if now - last < 5:
+        remain = int(5 - (now - last))
         minutes, seconds = divmod(remain, 60)
         return await ctx.send(embed=discord.Embed(
             description=f"🕒 You must wait **{minutes}m {seconds}s** before playing again.",
