@@ -66,7 +66,47 @@ def get_luck_bonus(user_id):
     return user_luck.pop(user_id, 0)
 
 
-@tree.command(name="reset-econemy", description="Reset player balances")
+@tree.command(name="clear_cooldowns", description="👑[ADMIN] Clear all cooldowns (admin only)")
+@app_commands.check(is_admin)
+async def clear_cooldowns(interaction: discord.Interaction):
+    global last_pray_time, robbery_cooldowns, work_cooldowns
+    global minesweeper_cooldowns, esex_cooldowns, crime_cooldowns, payment_lock_until
+
+    last_pray_time.clear()
+    robbery_cooldowns.clear()
+    work_cooldowns.clear()
+    minesweeper_cooldowns.clear()
+    esex_cooldowns.clear()
+    crime_cooldowns.clear()
+    payment_lock_until.clear()
+
+    embed = discord.Embed(
+        description="🟢 All cooldowns have been cleared successfully.",
+        color=discord.Color.green()
+    )
+    await interaction.response.send_message(embed=embed)
+
+@tree.command(name="set-minesweeper-lives", description="👑[ADMIN] Set the number of lives for Minesweeper (2–5)")
+@app_commands.describe(value="Lives (min 2, max 5)")
+@app_commands.check(is_admin)
+async def set_minesweeper_lives(interaction: discord.Interaction, value: int):
+    global START_LIVES
+
+    if not 2 <= value <= 5:
+        embed = discord.Embed(
+            description="🔴 Value must be between **2** and **5**.",
+            color=discord.Color.red()
+        )
+        return await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    START_LIVES = value
+    embed = discord.Embed(
+        description=f"🟢 **Minesweeper lives** successfully set to **{START_LIVES}**.",
+        color=discord.Color.green()
+    )
+    await interaction.response.send_message(embed=embed)
+
+@tree.command(name="reset-econemy", description="👑[ADMIN] Reset player balances")
 @app_commands.check(is_admin)
 async def reset_econemy(interaction: discord.Interaction):
     global user_balances
@@ -96,7 +136,7 @@ async def set_min_bet(interaction: discord.Interaction, value: int):
         )
     await interaction.response.send_message(embed=embed)
 
-@tree.command(name="set-start-money", description="Set starting balance (10k - 1m)")
+@tree.command(name="set-start-money", description="👑[ADMIN] Set starting balance (10k - 1m)")
 @app_commands.describe(value="New starting balance (10000 - 1000000)")
 @app_commands.check(is_admin)
 async def set_start_money(interaction: discord.Interaction, value: int):
@@ -288,7 +328,7 @@ async def minesweeper(ctx):
                     f"> Money won       : $60000\n"
                     f"> Player          : {ctx.author.mention}\n"
                     f"> Life's left     : {lives}\n\n"
-                    f"💡Quick Tip\nGet more luck using - **beach luck**"
+                    f"💡Quick Tip\nGet more luck using - **beach pray**"
                 )
                 await reveal_all_buttons(self.view, bomb_positions)
                 minesweeper_cooldowns[user_id] = time.time()
@@ -315,7 +355,7 @@ async def minesweeper(ctx):
             f"> Money won       : $0\n"
             f"> Player          : {ctx.author.mention}\n"
             f"> Life's left     : {START_LIVES}\n\n"
-            f"💡Quick Tip\nGet more luck using - **beach luck**"
+            f"💡Quick Tip\nGet more luck using - **beach pray**"
         ),
         color=discord.Color.gold()
     )
@@ -985,6 +1025,8 @@ async def draw_winner(ctx):
 @reset_econemy.error
 @set_min_bet.error
 @set_start_money.error
+@clear_cooldowns.error
+@set_minesweeper_lives.error
 async def admin_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.CheckFailure):
         await interaction.response.send_message(
@@ -994,5 +1036,4 @@ async def admin_error(interaction: discord.Interaction, error):
             ),
             ephemeral=False
         )
-
 bot.run.
