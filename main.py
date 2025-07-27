@@ -28,7 +28,6 @@ user_last_lottery = {}
 lottery_data = {}
 last_pray_time = {}
 lottery_active = False
-user_prison = {}
 robbery_cooldowns = {}
 work_cooldowns = {}
 minesweeper_cooldowns = {}
@@ -39,8 +38,6 @@ START_BALANCE = 100000
 MIN_BET = 5
 crime_cooldowns = {}        
 payment_lock_until = {} 
-rps_sessions = {}
-LUCK_INFLUENCE = 0.05
 
 @bot.event
 async def on_ready():
