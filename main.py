@@ -162,7 +162,9 @@ async def esex(ctx):
     # Alle anderen online Mitglieder (nicht Bots, nicht der User selbst)
     online_members = [
         m for m in ctx.guild.members
-        if m.status == discord.Status.online and not m.bot and m != ctx.author
+        if m.status != discord.Status.offline
+        and not m.bot
+        and m != ctx.author
     ]
 
     if not online_members:
