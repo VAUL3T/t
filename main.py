@@ -154,6 +154,42 @@ async def beg(ctx):
 
     await ctx.send(embed=embed)
 
+@bot.command()
+async def esex(ctx):
+    if ctx.guild is None:
+        return await ctx.send("Server only.")
+
+    # Alle anderen online Mitglieder (nicht Bots, nicht der User selbst)
+    online_members = [
+        m for m in ctx.guild.members
+        if m.status == discord.Status.online and not m.bot and m != ctx.author
+    ]
+
+    if not online_members:
+        return await ctx.send("🔴 No user found for e-sex.")
+
+    random_user = random.choice(online_members)
+    earned = random.randint(100, 1000)
+
+    user_id = ctx.author.id
+    previous = user_balances.get(user_id, START_BALANCE)
+    new_balance = previous + earned
+    user_balances[user_id] = new_balance
+
+    embed = discord.Embed(
+        title=f"🎭 Your **e-sex** with **{random_user.display_name}** earned you **${earned}**",
+        color=discord.Color.magenta()
+    )
+    embed.add_field(
+        name="💰 **Balance Update**",
+        value=(
+            f"> **Previous**: `${previous}`\n"
+            f"> **Earned**: `${earned}`\n"
+            f"> **Current**: `${new_balance}`"
+        ),
+        inline=False
+    )
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def robbery(ctx):
@@ -486,4 +522,4 @@ async def draw_winner(ctx):
     await ctx.send(embed=embed)
     lottery_active = False
 
-bot.
+b
