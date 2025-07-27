@@ -4,11 +4,13 @@ from discord.ui import Button, View
 import random
 import time
 import asyncio
+from discord import app_commands
+from discord.ext.commands import has_permissions, MissingPermissions
 from datetime import datetime, timedelta
 from discord.ext.commands import CheckFailure
 
 intents = discord.Intents.default()
-intents.message_content = True  # für Befehle wie beach cf 100
+intents.message_content = True  
 intents.guilds = True
 intents.members = True
 
@@ -17,7 +19,8 @@ WHITELISTED_GUILDS = [
     1345476135487672350
 ]
 
-bot = commands.Bot(command_prefix='beach ', intents=intents)
+bot = commands.Bot(command_prefix='beach ', help_command=None, intents=intents)
+tree = bot.tree
 
 # Guthaben & Luck
 user_balances = {}
@@ -27,17 +30,34 @@ last_pray_time = {}
 lottery_active = False
 user_prison = {}
 robbery_cooldowns = {}
-
+work_cooldowns = {}
+minesweeper_cooldowns = {}
 user_luck = {}
-
+START_LIVES = 3
+esex_cooldowns = {}
 START_BALANCE = 100000
 MIN_BET = 5
+crime_cooldowns = {}        
+payment_lock_until = {} 
+rps_sessions = {}
+LUCK_INFLUENCE = 0.05
+
+@bot.event
+async def on_ready():
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Synced {len(synced)} slash command(s).")
+    except Exception as e:
+        print(f"❌ Failed to sync commands: {e}")
 
 @bot.check
 async def globally_whitelist_guilds(ctx):
     if ctx.guild is None:
         return False  # Ignoriere DMs
     return ctx.guild.id in WHITELISTED_GUILDS
+
+def is_admin(interaction: discord.Interaction):
+    return interaction.user.guild_permissions.administrator
     
 def get_balance(user_id):
     return user_balances.get(user_id, START_BALANCE)
@@ -46,8 +66,265 @@ def update_balance(user_id, amount):
     user_balances[user_id] = get_balance(user_id) + amount
 
 def get_luck_bonus(user_id):
-    return user_luck.pop(user_id, 0) 
+    return user_luck.pop(user_id, 0)
 
+
+@tree.command(name="reset-econemy", description="Reset player balances")
+@app_commands.check(is_admin)
+async def reset_econemy(interaction: discord.Interaction):
+    global user_balances
+    user_balances.clear()
+
+    embed = discord.Embed(
+        description="🟢 Resetting was successful",
+        color=discord.Color.green()
+    )
+    await interaction.response.send_message(embed=embed)
+
+@tree.command(name="set-min-bet", description="Set minimum bet (1 - 999)")
+@app_commands.describe(value="New minimum bet (1 - 999)")
+@app_commands.check(is_admin)
+async def set_min_bet(interaction: discord.Interaction, value: int):
+    global MIN_BET
+    if 1 <= value <= 999:
+        MIN_BET = value
+        embed = discord.Embed(
+            description=f"🟢 MIN_BET set to **${MIN_BET}**",
+            color=discord.Color.green()
+        )
+    else:
+        embed = discord.Embed(
+            description="🔴 Value must be between 1 and 999",
+            color=discord.Color.red()
+        )
+    await interaction.response.send_message(embed=embed)
+
+@tree.command(name="set-start-money", description="Set starting balance (10k - 1m)")
+@app_commands.describe(value="New starting balance (10000 - 1000000)")
+@app_commands.check(is_admin)
+async def set_start_money(interaction: discord.Interaction, value: int):
+    global START_BALANCE
+    if 10000 <= value <= 1_000_000:
+        START_BALANCE = value
+        embed = discord.Embed(
+            description=f"🟢 START_BALANCE set to **${START_BALANCE:,}**",
+            color=discord.Color.green()
+        )
+    else:
+        embed = discord.Embed(
+            description="🔴 Value must be between 10,000 and 1,000,000",
+            color=discord.Color.red()
+        )
+    await interaction.response.send_message(embed=embed)
+
+@bot.command(name="help")
+async def beach_help(ctx):
+    # Dein embed code hier
+    embed = discord.Embed(
+        title="🎮 **Beach : Available Games**",
+        description="Browse and play any of the available games and test your luck",
+        color=discord.Color.blue()
+    )
+
+    embed.add_field(
+        name="🎲 Classic Casino Games",
+        value=(
+            "> 🎡 Roulette : `roulette`\n"
+            "> Alias : rl\n"
+            "> Usage : roulette <bet>\n"
+
+            "> 🎰 Slots : `slots`\n"
+            "> Alias : sl\n"
+            "> Usage : slots <bet>\n"
+
+            "> 🪙 Coinflip : `coinflip`\n"
+            "> Alias : cf\n"
+            "> Usage : coinflip <bet>\n"
+
+            "> 💣 Minesweeper : `minesweeper`\n"
+            "> Alias : ms\n"
+            "> Usage : minesweeper\n"
+
+            "> 🎲 Roulette: `roulette`\n"
+            "> Alias : re\n"
+            "> Usage : roulette <bet>"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="🏆 Adventure & Fun",
+        value=(
+            "> 🥷 Crime : `crime`\n"
+            "> Usage : crime\n"
+
+            "> 💕 Esex : `esex`\n"
+            "> Usage : esex | esex <@user>\n"
+
+            "> 🥺 Beg : `beg`\n"
+            "> Usage : beg\n"
+
+            "> 👷‍♂️ Work : `work`\n"
+            "> Usage : work"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="⚙️ Utility’s",
+        value=(
+            "> 💸 Balance : `balance`\n"
+            "> Usage : balance\n"
+
+            "> 🙏 Pray : `pray`\n"
+            "> Usage : pray\n"
+
+            "> 💵 Pay : `pay`\n"
+            "> Usage : pay <@user> <money>"
+        ),
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
+    
+@bot.command(aliases=["ms"])
+async def minesweeper(ctx):
+    user_id = ctx.author.id
+    now = time.time()
+
+    # Cooldown 5 Minuten
+    last = minesweeper_cooldowns.get(user_id, 0)
+    if now - last < 300:
+        remain = int(300 - (now - last))
+        minutes, seconds = divmod(remain, 60)
+        return await ctx.send(embed=discord.Embed(
+            description=f"🕒 You must wait **{minutes}m {seconds}s** before playing again.",
+            color=discord.Color.red()
+        ))
+
+    luck = user_luck.pop(user_id, 0)
+
+    width, height = 5, 4
+    total_fields = width * height
+
+    bombs_count = max(1, 6 - (luck // 5))
+    bomb_positions = set(random.sample(range(total_fields), bombs_count))
+
+    async def reveal_all_buttons(view, bomb_positions):
+        for child in view.children:
+            if isinstance(child, Button):
+                child.disabled = True
+                if child.idx in bomb_positions:
+                    child.label = "💣"
+                    child.style = discord.ButtonStyle.danger
+                else:
+                    child.label = "🟢"
+                    child.style = discord.ButtonStyle.success
+
+    class MSButton(Button):
+        def __init__(self, idx):
+            super().__init__(style=discord.ButtonStyle.secondary, label="?")
+            self.idx = idx
+
+        async def callback(self, interaction: discord.Interaction):
+            if interaction.user.id != user_id:
+                await interaction.response.send_message("🔴 This isn’t your game", ephemeral=True)
+                return
+
+            if self.disabled:
+                await interaction.response.defer()
+                return
+
+            lives = self.view.lives
+            safe_found = self.view.safe_found
+            money_won = self.view.money_won
+
+            if self.idx in bomb_positions:
+                lives -= 1
+                self.view.lives = lives
+                self.label = "💣"
+                self.style = discord.ButtonStyle.danger
+                self.disabled = True
+            else:
+                safe_found += 1
+                self.view.safe_found = safe_found
+                self.label = "🟢"
+                self.style = discord.ButtonStyle.success
+                self.disabled = True
+                money_won += 500
+                self.view.money_won = money_won
+
+            for child in self.view.children:
+                if isinstance(child, Button):
+                    if child.idx in bomb_positions and child.disabled:
+                        child.label = "💣"
+                        child.style = discord.ButtonStyle.danger
+                    elif child.disabled:
+                        child.label = "🟢"
+                        child.style = discord.ButtonStyle.success
+
+            embed = discord.Embed(
+                title="💣 **Game summary**",
+                description=(
+                    f"> Safe tiles found : {safe_found}\n"
+                    f"> Money won       : ${money_won}\n"
+                    f"> Player          : {ctx.author.mention}\n"
+                    f"> Life's left     : {lives}\n\n"
+                    f"💡Quick Tip\nGet more luck using - **beach luck**"
+                ),
+                color=discord.Color.gold()
+            )
+
+            if lives <= 0:
+                embed.title = "💥 **Game lost**"
+                await reveal_all_buttons(self.view, bomb_positions)
+                minesweeper_cooldowns[user_id] = time.time()
+                await interaction.response.edit_message(embed=embed, view=self.view)
+                return
+
+            safe_tiles_needed = total_fields - bombs_count
+            if safe_found == safe_tiles_needed:
+                embed.title = "💣 **Game won**"
+                self.view.money_won = 60000
+                embed.description = (
+                    f"> Safe tiles found : {safe_found}\n"
+                    f"> Money won       : $60000\n"
+                    f"> Player          : {ctx.author.mention}\n"
+                    f"> Life's left     : {lives}\n\n"
+                    f"💡Quick Tip\nGet more luck using - **beach luck**"
+                )
+                await reveal_all_buttons(self.view, bomb_positions)
+                minesweeper_cooldowns[user_id] = time.time()
+                await interaction.response.edit_message(embed=embed, view=self.view)
+                return
+
+            await interaction.response.edit_message(embed=embed, view=self.view)
+
+    class MSView(View):
+        def __init__(self):
+            super().__init__(timeout=None)
+            self.lives = START_LIVES
+            self.safe_found = 0
+            self.money_won = 0
+            for i in range(total_fields):
+                self.add_item(MSButton(i))
+
+    view = MSView()
+
+    embed = discord.Embed(
+        title="💣 **Game summary**",
+        description=(
+            f"> Safe tiles found : 0\n"
+            f"> Money won       : $0\n"
+            f"> Player          : {ctx.author.mention}\n"
+            f"> Life's left     : {START_LIVES}\n\n"
+            f"💡Quick Tip\nGet more luck using - **beach luck**"
+        ),
+        color=discord.Color.gold()
+    )
+
+    await ctx.send(embed=embed, view=view)
+    
 @bot.command(aliases=['cf'])
 async def coinflip(ctx, bet: int):
     user_id = ctx.author.id
@@ -154,32 +431,117 @@ async def beg(ctx):
 
     await ctx.send(embed=embed)
 
+@bot.command(aliases=["sl"])
+async def slots(ctx, bet: int):
+    user_id = ctx.author.id
+
+    if bet < MIN_BET:
+        embed = discord.Embed(
+            description=f"🔴 Your bet must be at least **${MIN_BET}**",
+            color=discord.Color.red()
+        )
+        return await ctx.send(embed=embed)
+
+    if get_balance(user_id) < bet:
+        embed = discord.Embed(
+            description="🔴 You don’t have enough money",
+            color=discord.Color.red()
+        )
+        return await ctx.send(embed=embed)
+
+    symbols = ["🟢", "🔴", "⚫️"]
+    luck = user_luck.get(user_id, 0)
+    user_luck[user_id] = 0  # ❗️Luck reset nach Spiel
+
+    # Gewinnchance basierend auf Luck
+    base_chance = 0.04
+    bonus_per_luck = 0.006
+    win_chance = base_chance + (bonus_per_luck * luck)
+
+    is_win = random.random() < win_chance
+
+    if is_win:
+        symbol = random.choice(symbols)
+        slot_result = [symbol] * 3
+        win_amount = bet * 2
+        update_balance(user_id, win_amount)
+        result_title = f"🎰 **Slot Results** - WON - **${win_amount}**"
+        color = discord.Color.green()
+        new_balance = get_balance(user_id)
+        previous = new_balance - win_amount
+    else:
+        slot_result = [random.choice(symbols) for _ in range(3)]
+        update_balance(user_id, -bet)
+        result_title = f"🎰 **Slot Results** - LOST - **${bet}**"
+        color = discord.Color.red()
+        new_balance = get_balance(user_id)
+        previous = new_balance + bet
+
+    embed = discord.Embed(
+        title=result_title,
+        description=(
+            f"🎲 **Spin Results**\n"
+            f"> {' | '.join(slot_result)}\n\n"
+            f"💰**Balance Update**\n"
+            f"> Previous : `${previous:,}`\n"
+            f"> Current : `${new_balance:,}`\n\n"
+            f"💡Quick Tip\nGet more luck using - **beach pray**"
+        ),
+        color=color
+    )
+
+    await ctx.send(embed=embed)
+
 @bot.command()
-async def esex(ctx):
+async def esex(ctx, member: discord.Member = None):
     if ctx.guild is None:
         return await ctx.send("Server only.")
 
-    # Alle anderen online Mitglieder (nicht Bots, nicht der User selbst)
-    online_members = [
-        m for m in ctx.guild.members
-        if m.status != discord.Status.offline
-        and not m.bot
-        and m != ctx.author
-    ]
+    user_id = ctx.author.id
+    now = time.time()
+    cooldown = 30 * 60  # 30 Minuten
 
-    if not online_members:
-        return await ctx.send("🔴 No user found for e-sex.")
+    if user_id in esex_cooldowns:
+        elapsed = now - esex_cooldowns[user_id]
+        if elapsed < cooldown:
+            remaining = cooldown - elapsed
+            minutes = int(remaining // 60)
+            seconds = int(remaining % 60)
+            return await ctx.send(
+                embed=discord.Embed(
+                    description=f"🕒 You must wait **{minutes}m {seconds}s** before using this command again.",
+                    color=discord.Color.red()
+                )
+            )
 
-    random_user = random.choice(online_members)
+    # Wenn kein Member angegeben, suche zufälligen Online/DND/Idle User außer Bots & dich selbst
+    if member is None:
+        candidates = [
+            m for m in ctx.guild.members
+            if m.status in (discord.Status.online, discord.Status.idle, discord.Status.dnd)
+            and not m.bot and m != ctx.author
+        ]
+        if not candidates:
+            return await ctx.send(embed=discord.Embed(description="🔴 No e-sex partner found", color=discord.Color.red()))
+        partner = random.choice(candidates)
+    else:
+        # Member angegeben, prüfen ob Bot oder sich selbst
+        if member.bot:
+            return await ctx.send(embed=discord.Embed(description="🔴 You can’t e-sex bots", color=discord.Color.red()))
+        if member == ctx.author:
+            return await ctx.send(embed=discord.Embed(description="🔴 You can’t e-sex yourself", color=discord.Color.red()))
+        partner = member
+
     earned = random.randint(100, 1000)
 
-    user_id = ctx.author.id
     previous = user_balances.get(user_id, START_BALANCE)
     new_balance = previous + earned
     user_balances[user_id] = new_balance
 
+    esex_cooldowns[user_id] = now
+
     embed = discord.Embed(
-        title=f"🎭 Your **e-sex** with **{random_user.display_name}** earned you **${earned}**",
+        title=f"🎭 Your **e-sex** with **{partner.display_name}** earned you **${earned}**",
         color=discord.Color.magenta()
     )
     embed.add_field(
@@ -194,75 +556,174 @@ async def esex(ctx):
     await ctx.send(embed=embed)
 
 @bot.command()
-async def robbery(ctx):
+async def work(ctx):
+    user_id = ctx.author.id
+    now = time.time()
+    cooldown_time = 12 * 60  # 12 Minuten
+
+    last_used = work_cooldowns.get(user_id, 0)
+    time_since = now - last_used
+
+    if time_since < cooldown_time:
+        remaining = int(cooldown_time - time_since)
+        minutes, seconds = divmod(remaining, 60)
+        time_str = f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
+
+        embed = discord.Embed(
+            description=f"🕒 You must wait **{time_str}** before working again",
+            color=discord.Color.orange()
+        )
+        return await ctx.send(embed=embed)
+
+    hours = random.randint(6, 12)
+    amount = random.randint(5000, 12000)
+
+    update_balance(user_id, amount)
+    work_cooldowns[user_id] = now
+
+    embed = discord.Embed(
+        description=f"🟢 You worked for {hours}h and earned **${amount:,}**",
+        color=discord.Color.green()
+    )
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def crime(ctx):
     user_id = ctx.author.id
     now = time.time()
 
-    # ⛓️ Im Gefängnis?
-    if user_id in user_prison and now < user_prison[user_id]:
-        remaining = int(user_prison[user_id] - now)
+    # Check Crime cooldown (35 Minuten)
+    last_crime = crime_cooldowns.get(user_id, 0)
+    cooldown_seconds = 35 * 60
+    if now - last_crime < cooldown_seconds:
+        remaining = int(cooldown_seconds - (now - last_crime))
         minutes, seconds = divmod(remaining, 60)
-        return await ctx.send(
-            embed=discord.Embed(
-                description=f"🕛 You are in jail. Wait **{minutes}m {seconds}s**.",
-                color=discord.Color.red()
-            )
+        embed = discord.Embed(
+            description=f"🕒 You must wait **{minutes}m {seconds}s** before committing another crime.",
+            color=discord.Color.red()
         )
+        return await ctx.send(embed=embed)
 
-    # 🕒 Cooldown prüfen
-    if user_id in robbery_cooldowns and now - robbery_cooldowns[user_id] < 1800:
-        remaining = int(1800 - (now - robbery_cooldowns[user_id]))
-        minutes, seconds = divmod(remaining, 60)
-        return await ctx.send(
-            embed=discord.Embed(
-                description=f"🕒 You can rob again in **{minutes}m {seconds}s**.",
-                color=discord.Color.orange()
-            )
-        )
+    # Gewinn/Verlust-Bereiche
+    base_money = random.randint(13000, 15000)
+    luck = user_luck.pop(user_id, 0)  # Luck einmalig nutzen & zurücksetzen
 
-    # 🎲 Erfolgschance mit Luck
-    luck = user_luck.get(user_id, 0)
-    base_chance = 0.4
-    success_chance = min(base_chance + (luck / 250), 0.9)  # max 90% chance
+    # Erfolgschance mit Luck (40% + Luck Modifier, max 90%)
+    base_chance = 0.40
+    luck_modifier = luck / 100  # z.B. 50 Luck = +0.5 = max cap applies
+    success_chance = min(base_chance + luck_modifier, 0.9)
     success = random.random() < success_chance
 
-    robber = ctx.author.mention
-    date = discord.utils.format_dt(discord.utils.utcnow(), style="F")
+    tax_rate = 0.20  # 20% criminal tax
+    tax_amount = int(base_money * tax_rate)
 
     if success:
-        money = random.randint(1_000_000, 5_000_000)
-        user_balances[user_id] = user_balances.get(user_id, 0) + money
+        # Gewinn nach Steuer
+        money_after_tax = base_money - tax_amount
+        previous_balance = user_balances.get(user_id, START_BALANCE)
+        new_balance = previous_balance + money_after_tax
+        user_balances[user_id] = new_balance
 
         embed = discord.Embed(
-            title="🚨 ROBBERY SUCCESS 🚨",
-            description=f"You stole **${money:,}** from the bank\n\n"
-                        f"> Date    : {date}\n"
-                        f"> Robber  : {robber}\n\n"
-                        f"💡 Quick Tip\nGet more luck using - **beach pray**",
+            title="💸 You made it 💸",
+            description=(
+                f"**${tax_amount:,}** was collected as criminal tax.\n\n"
+                f"💡Quick Tip\nGet more luck using - **beach pray**"
+            ),
             color=discord.Color.green()
         )
+
     else:
-        loss = random.randint(5000, 10000)
-        current_balance = user_balances.get(user_id, 0)
-        lost = min(current_balance, loss)
-        user_balances[user_id] = current_balance - lost
-        prison_time = random.randint(240, 360)  # 4m bis 6m
-        user_prison[user_id] = now + prison_time
+        # Verlust: 80% vom möglichen Gewinn verlieren
+        lost_money = int(base_money * 0.80)
+        previous_balance = user_balances.get(user_id, START_BALANCE)
+        remaining_money = previous_balance - lost_money
+
+        # Update Balance nicht negativ werden lassen
+        if remaining_money < 0:
+            lost_money = previous_balance
+            remaining_money = 0
+
+        user_balances[user_id] = remaining_money
 
         embed = discord.Embed(
-            title="🚨 ROBBERY FAILED 🚨",
-            description=f"You tried to steal **${random.randint(1_000_000, 5_000_000):,}** from the bank but failed\n\n"
-                        f"> Date        : {date}\n"
-                        f"> Robber      : {robber}\n"
-                        f"> Prison Time : {int(prison_time // 60)}m\n"
-                        f"> Lost Money  : ${lost:,}\n\n"
-                        f"💡 Quick Tip\nGet more luck using - **beach pray**",
+            title="🚨 Caught Red-Handed! 🚨",
+            description=(
+                f"You triggered an alarm and lost **${lost_money:,}** while escaping!\n"
+                f"**${tax_amount:,}** was collected as criminal tax.\n\n"
+                f"🔴 **1-Hour payment block activated!**\n\n"
+                f"💡Quick Tip\nGet more luck using - **beach pray**"
+            ),
             color=discord.Color.red()
         )
 
-    # 🕒 Cooldown setzen
-    robbery_cooldowns[user_id] = now
+        # 1 Stunde Payment Lock setzen
+        payment_lock_until[user_id] = now + 3600
 
+    # Crime cooldown setzen
+    crime_cooldowns[user_id] = now
+
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def pay(ctx, member: discord.Member, amount: int):
+    sender_id = ctx.author.id
+    receiver_id = member.id
+    now = time.time()
+
+    # Payment Lock Check
+    lock_time = payment_lock_until.get(sender_id, 0)
+    if now < lock_time:
+        remaining = int(lock_time - now)
+        minutes, seconds = divmod(remaining, 60)
+        embed = discord.Embed(
+            description=f"🔴 You are currently under payment block for another **{minutes}m {seconds}s** and cannot send money.",
+            color=discord.Color.red()
+        )
+        return await ctx.send(embed=embed)
+
+    # Bots ausschließen
+    if member.bot:
+        embed = discord.Embed(
+            description="🔴 You can’t pay bots",
+            color=discord.Color.red()
+        )
+        return await ctx.send(embed=embed)
+
+    # Nicht an sich selbst zahlen
+    if sender_id == receiver_id:
+        embed = discord.Embed(
+            description="🔴 You can’t pay yourself",
+            color=discord.Color.red()
+        )
+        return await ctx.send(embed=embed)
+
+    # Mindestbetrag
+    if amount < 5:
+        embed = discord.Embed(
+            description="🔴 You need to transfer at least **$5**",
+            color=discord.Color.red()
+        )
+        return await ctx.send(embed=embed)
+
+    sender_balance = user_balances.get(sender_id, START_BALANCE)
+
+    # Nicht genug Geld
+    if sender_balance < amount:
+        embed = discord.Embed(
+            description="🔴 You don’t have enough money",
+            color=discord.Color.red()
+        )
+        return await ctx.send(embed=embed)
+
+    # Überweisen
+    user_balances[sender_id] = sender_balance - amount
+    user_balances[receiver_id] = user_balances.get(receiver_id, START_BALANCE) + amount
+
+    embed = discord.Embed(
+        description=f"🟢 Successfully sent **${amount:,}** to {member.mention}",
+        color=discord.Color.green()
+    )
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -274,7 +735,7 @@ async def balance(ctx):
     )
     await ctx.send(embed=embed)
 
-@bot.command()
+@bot.command(aliases=["rl"])
 async def roulette(ctx, bet: int):
     user_id = ctx.author.id
     if bet < MIN_BET:
@@ -417,7 +878,7 @@ async def lottery(ctx):
     embed = discord.Embed(
         title="🎰 LOTTERY 🎰",
         description=(
-            "Lottery begins **Click the emoji below to participate**\n\n"
+            "Lottery begins **Click the menu down below to buy tickets**\n\n"
             f"**Prize Pool 💸**\n"
             f"> Total : **${prize}**\n"
             f"> Taxes : {tax}%\n"
@@ -524,4 +985,17 @@ async def draw_winner(ctx):
     await ctx.send(embed=embed)
     lottery_active = False
 
-b
+@reset_econemy.error
+@set_min_bet.error
+@set_start_money.error
+async def admin_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.CheckFailure):
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                description="🔴 You need admin permissions to use this command.",
+                color=discord.Color.red()
+            ),
+            ephemeral=False
+        )
+
+bot.run.
