@@ -66,7 +66,7 @@ def get_luck_bonus(user_id):
     return user_luck.pop(user_id, 0)
 
 
-@tree.command(name="clear_cooldowns", description="👑[ADMIN] Clear all cooldowns (admin only)")
+@tree.command(name="clear_cooldowns", description="👑[ADMIN] Clear all cooldowns")
 @app_commands.check(is_admin)
 async def clear_cooldowns(interaction: discord.Interaction):
     global last_pray_time, robbery_cooldowns, work_cooldowns
@@ -118,7 +118,7 @@ async def reset_econemy(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed)
 
-@tree.command(name="set-min-bet", description="Set minimum bet (1 - 999)")
+@tree.command(name="set-min-bet", description="👑[ADMIN] Set minimum bet (1 - 999)")
 @app_commands.describe(value="New minimum bet (1 - 999)")
 @app_commands.check(is_admin)
 async def set_min_bet(interaction: discord.Interaction, value: int):
