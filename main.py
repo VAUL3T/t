@@ -2,13 +2,10 @@ import discord
 from discord.ext import commands
 from discord.ui import Button, View
 import random
-from discord import app_commands
 import time
 import asyncio
 from datetime import datetime, timedelta
 from discord.ext.commands import CheckFailure
-import os
-import json
 
 intents = discord.Intents.default()
 intents.message_content = True  # für Befehle wie beach cf 100
@@ -16,15 +13,14 @@ intents.guilds = True
 intents.members = True
 
 WHITELISTED_GUILDS = [
-    1395416128599359489, 
-    987654321098765432 
+    1398830689583108196, 
+    1345476135487672350
 ]
 
 bot = commands.Bot(command_prefix='beach ', intents=intents)
 
 # Guthaben & Luck
 user_balances = {}
-BASE_PATH = "data"
 user_last_lottery = {}
 lottery_data = {}
 last_pray_time = {}
@@ -42,52 +38,15 @@ async def globally_whitelist_guilds(ctx):
     if ctx.guild is None:
         return False  # Ignoriere DMs
     return ctx.guild.id in WHITELISTED_GUILDS
-
-@bot.event
-async def on_ready():
-    try:
-        await bot.add_cog(EconCommands(bot))  # COG laden!
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(e)
-
+    
 def get_balance(user_id):
     return user_balances.get(user_id, START_BALANCE)
-
 
 def update_balance(user_id, amount):
     user_balances[user_id] = get_balance(user_id) + amount
 
-
 def get_luck_bonus(user_id):
-    return user_luck.pop(user_id, 0)  # einmalig nutzbar
-
-class EconCommands(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    @app_commands.command(name="reset-econemy", description="Reset all economy-related data")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def reset_econemy(self, interaction: discord.Interaction):
-        global user_balances, user_luck, last_pray_time, robbery_cooldowns, lottery_data, user_prison
-
-        # Zurücksetzen der Daten
-        user_balances.clear()
-        user_luck.clear()
-        last_pray_time.clear()
-        robbery_cooldowns.clear()
-        lottery_data.clear()
-        user_prison.clear()
-
-        embed = discord.Embed(
-            description="🔴 Economy Reset Successful",
-            color=discord.Color.red()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=False)  # Nur für Admin sichtbar
-
-async def setup(bot):
-    await bot.add_cog(EconCommands(bot))
+    return user_luck.pop(user_id, 0) 
 
 @bot.command(aliases=['cf'])
 async def coinflip(ctx, bet: int):
@@ -340,7 +299,6 @@ async def roulette(ctx, bet: int):
 
     await ctx.send(embed=embed)
     
-
 @bot.command()
 async def pray(ctx):
     user_id = ctx.author.id
@@ -475,7 +433,6 @@ async def lottery(ctx):
     await asyncio.sleep(1200)  # 20 Minuten warten
     await draw_winner(ctx)
 
-
 async def update_embed():
     msg = lottery_data["message"]
     embed = msg.embeds[0]
@@ -529,5 +486,4 @@ async def draw_winner(ctx):
     await ctx.send(embed=embed)
     lottery_active = False
 
-
-bot.run("")
+bot.
