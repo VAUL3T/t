@@ -211,6 +211,7 @@ async def beach_help(ctx):
         name="⚙️ Utility’s",
         value=(
             "> 💸 Balance : `balance`\n"
+            "> Alias : bal\n"
             "> Usage : balance\n"
 
             "> 🙏 Pray : `pray`\n"
