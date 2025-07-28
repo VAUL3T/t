@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 from discord.ui import Button, View
 import random
+import os
+import json
 import typing
 import time
 import asyncio
@@ -11,19 +13,17 @@ from datetime import datetime, timedelta
 from discord.ext.commands import CheckFailure
 
 intents = discord.Intents.default()
-intents.message_content = True  
+intents.message_content = True
 intents.guilds = True
 intents.members = True
 
-WHITELISTED_GUILDS = [
-    1398830689583108196, 
-    1345476135487672350
-]
-
+# Nur ein Server → feste Datei
+WHITELISTED_GUILDS = [1345476135487672350]
+DATA_FILE = "1345476135487672350.json"
 bot = commands.Bot(command_prefix='beach ', help_command=None, intents=intents)
 tree = bot.tree
 
-# Guthaben & Luck
+# Economy & Cooldown Variablen
 user_balances = {}
 user_last_lottery = {}
 lottery_data = {}
@@ -37,8 +37,8 @@ START_LIVES = 3
 esex_cooldowns = {}
 START_BALANCE = 100000
 MIN_BET = 5
-crime_cooldowns = {}        
-payment_lock_until = {} 
+crime_cooldowns = {}
+payment_lock_until = {}
 
 @bot.event
 async def on_ready():
@@ -54,18 +54,54 @@ async def globally_whitelist_guilds(ctx):
         return False  # Ignoriere DMs
     return ctx.guild.id in WHITELISTED_GUILDS
 
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "w") as f:
+        json.dump({"users": {}, "server": {}}, f)
+
+def load_data():
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+
 def is_admin(interaction: discord.Interaction):
     return interaction.user.guild_permissions.administrator
     
+
 def get_balance(user_id):
-    return user_balances.get(user_id, START_BALANCE)
+    data = load_data()
+    return data["users"].get(str(user_id), {}).get("balance", 0)
 
 def update_balance(user_id, amount):
-    user_balances[user_id] = get_balance(user_id) + amount
+    data = load_data()
+    user = data["users"].setdefault(str(user_id), {})
+    user["balance"] = user.get("balance", 0) + amount
+    save_data(data)
 
 def get_luck_bonus(user_id):
-    return user_luck.pop(user_id, 0)
+    data = load_data()
+    luck = data["users"].get(str(user_id), {}).get("luck", 0)
+    data["users"][str(user_id)]["luck"] = 0  # zurücksetzen
+    save_data(data)
+    return luck
 
+def set_luck(user_id, value):
+    data = load_data()
+    user = data["users"].setdefault(str(user_id), {})
+    user["luck"] = value
+    save_data(data)
+
+def get_server_setting(key, default):
+    data = load_data()
+    return data["server"].get(key, default)
+
+def set_server_setting(key, value):
+    data = load_data()
+    data["server"][key] = value
+    save_data(data)
 
 @tree.command(name="clear_cooldowns", description="👑[ADMIN] Clear all cooldowns")
 @app_commands.check(is_admin)
