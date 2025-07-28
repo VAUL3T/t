@@ -351,7 +351,7 @@ async def minesweeper(ctx):
                     f"> Money won       : ${money_won}\n"
                     f"> Player          : {ctx.author.mention}\n"
                     f"> Life's left     : {lives}\n\n"
-                    f"💡Quick Tip\nGet more luck using - **beach luck**"
+                    f"💡Quick Tip\nGet more luck using - **beach pray**"
                 ),
                 color=discord.Color.gold()
             )
@@ -360,6 +360,7 @@ async def minesweeper(ctx):
                 embed.title = "💥 **Game lost**"
                 await reveal_all_buttons(self.view, bomb_positions)
                 minesweeper_cooldowns[user_id] = time.time()
+                update_balance(user_id, self.view.money_won)
                 await interaction.response.edit_message(embed=embed, view=self.view)
                 return
 
@@ -376,6 +377,7 @@ async def minesweeper(ctx):
                 )
                 await reveal_all_buttons(self.view, bomb_positions)
                 minesweeper_cooldowns[user_id] = time.time()
+                update_balance(user_id, self.view.money_won)
                 await interaction.response.edit_message(embed=embed, view=self.view)
                 return
 
