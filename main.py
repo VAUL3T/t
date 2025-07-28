@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord.ui import Button, View
 import random
+import typing
 import time
 import asyncio
 from discord import app_commands
