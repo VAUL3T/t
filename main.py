@@ -763,11 +763,53 @@ async def pay(ctx, member: discord.Member, amount: int):
     )
     await ctx.send(embed=embed)
 
-@bot.command()
-async def balance(ctx):
-    balance = get_balance(ctx.author.id)
+@bot.command(aliases=["bal"])
+async def balance(ctx, *, target_arg: typing.Optional[str] = None):
+    target = ctx.author
+
+    if target_arg:
+        # Wenn Mention vorhanden, nimm Mention
+        if ctx.message.mentions:
+            target = ctx.message.mentions[0]
+        else:
+            # Falls nur eine User-ID gegeben ist
+            if target_arg.isdigit():
+                user_id = int(target_arg)
+                member = ctx.guild.get_member(user_id)
+                if member:
+                    target = member
+                else:
+                    try:
+                        # Fallback: User holen (auch wenn nicht im Server sichtbar)
+                        user = await bot.fetch_user(user_id)
+                        target = user
+                    except:
+                        pass 
+
+            if isinstance(target, discord.User) and target == ctx.author:
+                lower_arg = target_arg.lower()
+                matched = discord.utils.find(
+                    lambda m: lower_arg in m.name.lower() or lower_arg in m.display_name.lower(),
+                    ctx.guild.members
+                )
+                if matched:
+                    target = matched
+                else:
+                    embed = discord.Embed(
+                        description=f"🔴 No user found matching `{target_arg}`.",
+                        color=discord.Color.red()
+                    )
+                    return await ctx.send(embed=embed)
+
+    balance = get_balance(target.id)
+    desc = (
+        f"Your current balance is **${balance}**"
+        if target == ctx.author
+        else f"**{getattr(target, 'display_name', target.name)}**'s current balance is **${balance}**"
+    )
+
     embed = discord.Embed(
-        description=f"Your current balance is **${balance}**",
+        description=desc,
         color=discord.Color.blue()
     )
     await ctx.send(embed=embed)
@@ -833,6 +875,32 @@ async def roulette(ctx, bet: int):
     gif_url = "https://images-ext-1.discordapp.net/external/ch1XvTY8DwtClC4i-Z_pRYZ-j1GmtPgepO9A98CetgY/https/media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExNWM3Z2N3ZHN4OHJtZ3F3MHIzY3lkZmdrdXN3Z3dpM2pqeWJnZXJkYyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26uflBhaGt5lQsaCA/giphy.gif?width=338&height=238"
     embed.set_thumbnail(url=gif_url)
 
+    await ctx.send(embed=embed)
+
+@bot.command(aliases=["lb"])
+async def leaderboard(ctx):
+    user_id = ctx.author.id
+    sorted_users = sorted(user_balances.items(), key=lambda x: x[1], reverse=True)
+    
+    embed = discord.Embed(
+        title="🏆 Leaderboard",
+        color=discord.Color.gold()
+    )
+
+    # Top 10 anzeigen
+    for idx, (uid, bal) in enumerate(sorted_users[:10], start=1):
+        user = await bot.fetch_user(uid)
+        embed.add_field(
+            name=f"[ {idx} ] {user.name}",
+            value=f"**${bal:,}**",
+            inline=False
+        )
+
+    # Eigene Platzierung suchen
+    user_rank = next((i + 1 for i, (uid, _) in enumerate(sorted_users) if uid == user_id), None)
+    current_date = datetime.now().strftime("%-m/%-d/%y")  # z. B. 7/27/25
+
+    embed.set_footer(text=f"Your global rank : #{user_rank} | {current_date}")
     await ctx.send(embed=embed)
     
 @bot.command()
