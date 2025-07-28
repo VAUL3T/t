@@ -73,7 +73,13 @@ def is_admin(interaction: discord.Interaction):
 
 def get_balance(user_id):
     data = load_data()
-    return data["users"].get(str(user_id), {}).get("balance", 0)
+    user = data["users"].setdefault(str(user_id), {})
+
+    if "balance" not in user:
+        user["balance"] = START_BALANCE
+        save_data(data)
+
+    return user["balance"]
 
 def update_balance(user_id, amount):
     data = load_data()
