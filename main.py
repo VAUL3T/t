@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ui import Button, View
 import random
 import os
@@ -22,8 +22,10 @@ WHITELISTED_GUILDS = [1345476135487672350]
 DATA_FILE = "1345476135487672350.json"
 bot = commands.Bot(command_prefix='beach ', help_command=None, intents=intents)
 tree = bot.tree
-
-# Economy & Cooldown Variablen
+PET_FILE = "1345476135487672350.json"  # dein Server-File
+PET_ACTION_COOLDOWN = 300  # 5 Minuten
+WORK_COOLDOWN = 1800  # 30 Minuten
+PET_DECAY_INTERVAL = 3600  # 1 Stunde
 user_balances = {}
 user_last_lottery = {}
 lottery_data = {}
@@ -108,6 +110,36 @@ def set_server_setting(key, value):
     data = load_data()
     data["server"][key] = value
     save_data(data)
+
+def get_pet_data(user_id):
+    data = load_data()
+    return data["users"].get(str(user_id), {}).get("pet")
+
+def set_pet_data(user_id, pet_data):
+    data = load_data()
+    data["users"].setdefault(str(user_id), {})["pet"] = pet_data
+    save_data(data)
+
+def pet_progress_bar(value):
+    blocks = int(value / 10)
+    return f"{'█' * blocks}{'░' * (10 - blocks)} {value}/100"
+
+def get_pet_emoji(pet_type):
+    return {
+        "Dog": "🐶", "Cat": "🐱", "Rabbit": "🐰", "Hamster": "🐹"
+    }.get(pet_type, "🐾")
+
+def get_earn_amount(hunger, happy, clean):
+    if hunger > 90 and happy > 90 and clean > 90:
+        return random.randint(15000, 25000)
+    elif hunger > 80 and happy > 80 and clean > 80:
+        return random.randint(5000, 15000)
+    elif hunger > 40 and happy > 40 and clean > 40:
+        return random.randint(3000, 5000)
+    else:
+        return 1000
+
+last_pet_actions = {}
 
 @tree.command(name="clear_cooldowns", description="👑[ADMIN] Clear all cooldowns")
 @app_commands.check(is_admin)
@@ -485,6 +517,141 @@ async def beg(ctx):
     embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
 
     await ctx.send(embed=embed)
+
+class PetView(View):
+    def __init__(self, user_id):
+        super().__init__(timeout=None)
+        self.user_id = user_id
+
+    async def interaction_check(self, interaction):
+        return interaction.user.id == self.user_id
+
+    @discord.ui.button(label="🍔 Feed", style=discord.ButtonStyle.green)
+    async def feed(self, interaction, button):
+        now = datetime.utcnow().timestamp()
+        if now - last_pet_actions.get((self.user_id, "feed"), 0) < PET_ACTION_COOLDOWN:
+            return await interaction.response.send_message("⏳ You must wait before feeding again.", ephemeral=True)
+        pet = get_pet_data(self.user_id)
+        if not pet: return
+        pet["hunger"] = min(pet["hunger"] + 20, 100)
+        last_pet_actions[(self.user_id, "feed")] = now
+        set_pet_data(self.user_id, pet)
+        await interaction.response.edit_message(embed=make_pet_embed(self.user_id), view=self)
+
+    @discord.ui.button(label="🛝 Play", style=discord.ButtonStyle.blurple)
+    async def play(self, interaction, button):
+        now = datetime.utcnow().timestamp()
+        if now - last_pet_actions.get((self.user_id, "play"), 0) < PET_ACTION_COOLDOWN:
+            return await interaction.response.send_message("⏳ You must wait before playing again.", ephemeral=True)
+        pet = get_pet_data(self.user_id)
+        if not pet: return
+        pet["happiness"] = min(pet["happiness"] + 20, 100)
+        pet["hunger"] = max(pet["hunger"] - 10, 0)
+        last_pet_actions[(self.user_id, "play")] = now
+        set_pet_data(self.user_id, pet)
+        await interaction.response.edit_message(embed=make_pet_embed(self.user_id), view=self)
+
+    @discord.ui.button(label="💦 Clean", style=discord.ButtonStyle.gray)
+    async def clean(self, interaction, button):
+        now = datetime.utcnow().timestamp()
+        if now - last_pet_actions.get((self.user_id, "clean"), 0) < PET_ACTION_COOLDOWN:
+            return await interaction.response.send_message("⏳ You must wait before cleaning again.", ephemeral=True)
+        pet = get_pet_data(self.user_id)
+        if not pet: return
+        pet["clean"] = min(pet["clean"] + 25, 100)
+        last_pet_actions[(self.user_id, "clean")] = now
+        set_pet_data(self.user_id, pet)
+        await interaction.response.edit_message(embed=make_pet_embed(self.user_id), view=self)
+
+    @discord.ui.button(label="💪 Work", style=discord.ButtonStyle.red)
+    async def work(self, interaction, button):
+        now = datetime.utcnow().timestamp()
+        if now - last_pet_actions.get((self.user_id, "work"), 0) < WORK_COOLDOWN:
+            return await interaction.response.send_message("⏳ Pet is resting from work!", ephemeral=True)
+        pet = get_pet_data(self.user_id)
+        if not pet: return
+        earned = get_earn_amount(pet["hunger"], pet["happiness"], pet["clean"])
+        update_balance(self.user_id, earned)
+        pet["clean"] = max(pet["clean"] - 15, 0)
+        pet["happiness"] = max(pet["happiness"] - 15, 0)
+        pet["earned"] += earned
+        last_pet_actions[(self.user_id, "work")] = now
+        set_pet_data(self.user_id, pet)
+        await interaction.response.edit_message(embed=make_pet_embed(self.user_id), view=self)
+
+def make_pet_embed(user_id):
+    pet = get_pet_data(user_id)
+    if not pet:
+        return discord.Embed(description="No pet found.", color=discord.Color.red())
+
+    emoji = get_pet_emoji(pet["type"])
+    embed = discord.Embed(
+        title=f"{emoji} {pet['type']}",
+        description=(
+            f"> Level {pet['level']} {pet['type']}\n\n"
+            f"🍔 Hunger:\n{pet_progress_bar(pet['hunger'])}\n"
+            f"🛝 Happiness:\n{pet_progress_bar(pet['happiness'])}\n"
+            f"💦 Clean:\n{pet_progress_bar(pet['clean'])}\n"
+            f"\n💰 Total earned:\n**${pet['earned']}**"
+        ),
+        color=discord.Color.orange()
+    )
+    return embed
+
+class PetSelect(Select):
+    def __init__(self, user_id):
+        options = [
+            discord.SelectOption(label="Dog", emoji="🐶"),
+            discord.SelectOption(label="Cat", emoji="🐱"),
+            discord.SelectOption(label="Rabbit", emoji="🐰"),
+            discord.SelectOption(label="Hamster", emoji="🐹"),
+        ]
+        super().__init__(placeholder="🐾 Select your pet type", options=options)
+        self.user_id = user_id
+
+    async def callback(self, interaction):
+        pet_data = {
+            "type": self.values[0],
+            "level": 1,
+            "hunger": 50,
+            "happiness": 50,
+            "clean": 50,
+            "earned": 0,
+            "created": datetime.utcnow().timestamp()
+        }
+        set_pet_data(self.user_id, pet_data)
+        await interaction.response.edit_message(embed=discord.Embed(
+            title=f"You’ve adopted a wonderful {self.values[0]}",
+            description="🍔 Feed your pet to keep them healthy\n🛝 Play with them to keep them happy\n💦 Clean them regularly\n💪 Work with them to earn money",
+            color=discord.Color.green()
+        ), view=None)
+
+class PetSelectView(View):
+    def __init__(self, user_id):
+        super().__init__(timeout=None)
+        self.add_item(PetSelect(user_id))
+
+@commands.command(name="pet")
+async def pet_command(ctx):
+    pet = get_pet_data(ctx.author.id)
+    if not pet:
+        embed = discord.Embed(
+            title="🐾 Welcome to pet Paradise",
+            description=(
+                "> You don’t have a pet yet!\n> Choose one below to get started\n\n"
+                "🎯 How it works :\n"
+                "🍔 Feed your pet to keep them healthy\n"
+                "🛝 Play with them to keep them happy\n"
+                "💦 Clean them regularly\n"
+                "💪 Work with them to earn money\n\n"
+                "> Warning\n> Pet dies after 2 days without care"
+            ),
+            color=discord.Color.blurple()
+        )
+        embed.set_footer(text="well-cared pets can earn you serious money")
+        await ctx.send(embed=embed, view=PetSelectView(ctx.author.id))
+    else:
+        await ctx.send(embed=make_pet_embed(ctx.author.id), view=PetView(ctx.author.id))
 
 @bot.command(aliases=["sl"])
 async def slots(ctx, bet: int):
