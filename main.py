@@ -22,10 +22,9 @@ WHITELISTED_GUILDS = [1345476135487672350]
 DATA_FILE = "1345476135487672350.json"
 bot = commands.Bot(command_prefix='beach ', help_command=None, intents=intents)
 tree = bot.tree
-PET_FILE = "1345476135487672350.json"  # dein Server-File
-PET_ACTION_COOLDOWN = 300  # 5 Minuten
-WORK_COOLDOWN = 1800  # 30 Minuten
-PET_DECAY_INTERVAL = 3600  # 1 Stunde
+PET_FILE = "1345476135487672350.json"
+PET_ACTION_COOLDOWN = 300  # 5 Min
+WORK_COOLDOWN = 1800     
 user_balances = {}
 user_last_lottery = {}
 lottery_data = {}
@@ -122,22 +121,23 @@ def set_pet_data(user_id, pet_data):
 
 def pet_progress_bar(value):
     blocks = int(value / 10)
-    return f"{'█' * blocks}{'░' * (10 - blocks)} {value}/100"
+    return f"{'█'*blocks}{'░'*(10-blocks)} {value}/100"
 
 def get_pet_emoji(pet_type):
-    return {
-        "Dog": "🐶", "Cat": "🐱", "Rabbit": "🐰", "Hamster": "🐹"
-    }.get(pet_type, "🐾")
+    return {"Dog": "🐶", "Cat": "🐱", "Rabbit": "🐰", "Hamster": "🐹"}.get(pet_type, "🐾")
 
 def get_earn_amount(hunger, happy, clean):
-    if hunger > 90 and happy > 90 and clean > 90:
+    if min(hunger, happy, clean) > 90:
         return random.randint(15000, 25000)
-    elif hunger > 80 and happy > 80 and clean > 80:
+    elif min(hunger, happy, clean) > 80:
         return random.randint(5000, 15000)
-    elif hunger > 40 and happy > 40 and clean > 40:
+    elif min(hunger, happy, clean) > 40:
         return random.randint(3000, 5000)
-    else:
-        return 1000
+    return 1000
+
+def get_age_hours(pet):
+    created = datetime.fromtimestamp(pet["created"])
+    return int((datetime.utcnow() - created).total_seconds() // 3600)
 
 last_pet_actions = {}
 
@@ -530,7 +530,9 @@ class PetView(View):
     async def feed(self, interaction, button):
         now = datetime.utcnow().timestamp()
         if now - last_pet_actions.get((self.user_id, "feed"), 0) < PET_ACTION_COOLDOWN:
-            return await interaction.response.send_message("⏳ You must wait before feeding again.", ephemeral=True)
+            remain = int(PET_ACTION_COOLDOWN - (now - last_pet_actions[(self.user_id, "feed")]))
+            m, s = divmod(remain, 60)
+            return await interaction.response.send_message(f"🕒 You must wait **{m:02}m {s:02}s** before using this command again", ephemeral=True)
         pet = get_pet_data(self.user_id)
         if not pet: return
         pet["hunger"] = min(pet["hunger"] + 20, 100)
@@ -542,7 +544,9 @@ class PetView(View):
     async def play(self, interaction, button):
         now = datetime.utcnow().timestamp()
         if now - last_pet_actions.get((self.user_id, "play"), 0) < PET_ACTION_COOLDOWN:
-            return await interaction.response.send_message("⏳ You must wait before playing again.", ephemeral=True)
+            remain = int(PET_ACTION_COOLDOWN - (now - last_pet_actions[(self.user_id, "play")]))
+            m, s = divmod(remain, 60)
+            return await interaction.response.send_message(f"🕒 You must wait **{m:02}m {s:02}s** before using this command again", ephemeral=True)
         pet = get_pet_data(self.user_id)
         if not pet: return
         pet["happiness"] = min(pet["happiness"] + 20, 100)
@@ -555,7 +559,9 @@ class PetView(View):
     async def clean(self, interaction, button):
         now = datetime.utcnow().timestamp()
         if now - last_pet_actions.get((self.user_id, "clean"), 0) < PET_ACTION_COOLDOWN:
-            return await interaction.response.send_message("⏳ You must wait before cleaning again.", ephemeral=True)
+            remain = int(PET_ACTION_COOLDOWN - (now - last_pet_actions[(self.user_id, "clean")]))
+            m, s = divmod(remain, 60)
+            return await interaction.response.send_message(f"🕒 You must wait **{m:02}m {s:02}s** before using this command again", ephemeral=True)
         pet = get_pet_data(self.user_id)
         if not pet: return
         pet["clean"] = min(pet["clean"] + 25, 100)
@@ -567,7 +573,9 @@ class PetView(View):
     async def work(self, interaction, button):
         now = datetime.utcnow().timestamp()
         if now - last_pet_actions.get((self.user_id, "work"), 0) < WORK_COOLDOWN:
-            return await interaction.response.send_message("⏳ Pet is resting from work!", ephemeral=True)
+            remain = int(WORK_COOLDOWN - (now - last_pet_actions[(self.user_id, "work")]))
+            m, s = divmod(remain, 60)
+            return await interaction.response.send_message(f"🕒 You must wait **{m:02}m {s:02}s** before using this command again", ephemeral=True)
         pet = get_pet_data(self.user_id)
         if not pet: return
         earned = get_earn_amount(pet["hunger"], pet["happiness"], pet["clean"])
@@ -575,6 +583,7 @@ class PetView(View):
         pet["clean"] = max(pet["clean"] - 15, 0)
         pet["happiness"] = max(pet["happiness"] - 15, 0)
         pet["earned"] += earned
+        pet["level"] += 1
         last_pet_actions[(self.user_id, "work")] = now
         set_pet_data(self.user_id, pet)
         await interaction.response.edit_message(embed=make_pet_embed(self.user_id), view=self)
@@ -584,34 +593,33 @@ def make_pet_embed(user_id):
     if not pet:
         return discord.Embed(description="No pet found.", color=discord.Color.red())
 
+    age = get_age_hours(pet)
     emoji = get_pet_emoji(pet["type"])
     embed = discord.Embed(
         title=f"{emoji} {pet['type']}",
         description=(
-            f"> Level {pet['level']} {pet['type']}\n\n"
-            f"🍔 Hunger:\n{pet_progress_bar(pet['hunger'])}\n"
-            f"🛝 Happiness:\n{pet_progress_bar(pet['happiness'])}\n"
-            f"💦 Clean:\n{pet_progress_bar(pet['clean'])}\n"
-            f"\n💰 Total earned:\n**${pet['earned']}**"
+            f"> Level : {pet['level']}\n"
+            f"> Age   : {age}h\n\n"
+            f"🍔 Hunger :\n{pet_progress_bar(pet['hunger'])}\n\n"
+            f"🛝 Happiness :\n{pet_progress_bar(pet['happiness'])}\n\n"
+            f"💦 Cleanliness :\n{pet_progress_bar(pet['clean'])}\n\n"
+            f"💰 Total earned :\n**${pet['earned']}**"
         ),
-        color=discord.Color.orange()
+        color=discord.Color.blurple()
     )
+    embed.set_footer(text="💰Keep all stats above 80 for ENHANCED EARNINGS")
     return embed
 
 class PetSelect(Select):
     def __init__(self, user_id):
-        options = [
-            discord.SelectOption(label="Dog", emoji="🐶"),
-            discord.SelectOption(label="Cat", emoji="🐱"),
-            discord.SelectOption(label="Rabbit", emoji="🐰"),
-            discord.SelectOption(label="Hamster", emoji="🐹"),
-        ]
+        options = [discord.SelectOption(label=pet, emoji=get_pet_emoji(pet)) for pet in ["Dog", "Cat", "Rabbit", "Hamster"]]
         super().__init__(placeholder="🐾 Select your pet type", options=options)
         self.user_id = user_id
 
     async def callback(self, interaction):
+        selected = self.values[0]
         pet_data = {
-            "type": self.values[0],
+            "type": selected,
             "level": 1,
             "hunger": 50,
             "happiness": 50,
@@ -620,11 +628,12 @@ class PetSelect(Select):
             "created": datetime.utcnow().timestamp()
         }
         set_pet_data(self.user_id, pet_data)
-        await interaction.response.edit_message(embed=discord.Embed(
-            title=f"You’ve adopted a wonderful {self.values[0]}",
-            description="🍔 Feed your pet to keep them healthy\n🛝 Play with them to keep them happy\n💦 Clean them regularly\n💪 Work with them to earn money",
-            color=discord.Color.green()
-        ), view=None)
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title=f"You’ve adopted a wonderful {selected}",
+                description="🍔 Feed your pet to keep them healthy\n🛝 Play with them to keep them happy\n💦 Clean them regularly\n💪 Work with them to earn money",
+                color=discord.Color.green()
+            ), view=None)
 
 class PetSelectView(View):
     def __init__(self, user_id):
@@ -652,7 +661,7 @@ async def pet_command(ctx):
         await ctx.send(embed=embed, view=PetSelectView(ctx.author.id))
     else:
         await ctx.send(embed=make_pet_embed(ctx.author.id), view=PetView(ctx.author.id))
-
+        
 @bot.command(aliases=["sl"])
 async def slots(ctx, bet: int):
     user_id = ctx.author.id
