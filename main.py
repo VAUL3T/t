@@ -47,8 +47,6 @@ async def on_ready():
         synced = await bot.tree.sync()
         decay_pet_stats.start()
         print(f"Synced {len(synced)} slash command(s).")
-        for cmd in bot.tree.get_commands():
-            print(f"{cmd.name} - {cmd.id}")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 
