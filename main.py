@@ -43,12 +43,10 @@ payment_lock_until = {}
 
 @bot.event
 async def on_ready():
-    try:
-        synced = await bot.tree.sync()
-        decay_pet_stats.start()
-        print(f"Synced {len(synced)} slash command(s).")
-    except Exception as e:
-        print(f"Failed to sync commands: {e}")
+    synced = await bot.tree.sync()
+    decay_pet_stats.start()
+    for cmd in bot.tree.get_commands():
+        print(f"{cmd.name} – {cmd.mention}")
 
 @bot.check
 async def globally_whitelist_guilds(ctx):
