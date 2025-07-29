@@ -45,6 +45,7 @@ payment_lock_until = {}
 async def on_ready():
     try:
         synced = await bot.tree.sync()
+        decay_pet_stats.start()
         print(f"✅ Synced {len(synced)} slash command(s).")
     except Exception as e:
         print(f"❌ Failed to sync commands: {e}")
@@ -1199,6 +1200,34 @@ async def pray(ctx):
     )
     embed.set_thumbnail(url=ctx.author.avatar.url)
     await ctx.send(embed=embed)
+
+@tasks.loop(hours=1)
+async def decay_pet_stats():
+    for guild_id in WHITELISTED_GUILDS:
+        data = load_server_data(guild_id)
+        for user_id, user_data in data.get("users", {}).items():
+            pet = user_data.get("pet")
+            if not pet:
+                continue
+
+            pet["hunger"] = max(pet["hunger"] - random.randint(1, 3), 0)
+            pet["happiness"] = max(pet["happiness"] - random.randint(1, 2), 0)
+            pet["clean"] = max(pet["clean"] - random.randint(1, 3), 0)
+
+            if pet["hunger"] == 0:
+                try:
+                    user = await bot.fetch_user(int(user_id))
+                    embed = discord.Embed(
+                        description="🔴 Your pet died because you didn’t feed him",
+                        color=discord.Color.red()
+                    )
+                    await user.send(embed=embed)
+                except:
+                    pass
+
+                user_data.pop("pet", None)
+
+        save_server_data(guild_id, data)
 
 @reset_econemy.error
 @set_start_money.error
