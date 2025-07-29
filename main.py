@@ -129,56 +129,28 @@ async def clear_cooldowns(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed)
 
-@tree.command(name="set-minesweeper-lives", description="👑[ADMIN] Set the number of lives for Minesweeper (2–5)")
-@app_commands.describe(value="Lives (min 2, max 5)")
-@app_commands.check(is_admin)
-async def set_minesweeper_lives(interaction: discord.Interaction, value: int):
-    global START_LIVES
-
-    if not 2 <= value <= 5:
-        embed = discord.Embed(
-            description="🔴 Value must be between **2** and **5**.",
-            color=discord.Color.red()
-        )
-        return await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    START_LIVES = value
-    embed = discord.Embed(
-        description=f"🟢 **Minesweeper lives** successfully set to **{START_LIVES}**.",
-        color=discord.Color.green()
-    )
-    await interaction.response.send_message(embed=embed)
-
 @tree.command(name="reset-econemy", description="👑[ADMIN] Reset player balances")
 @app_commands.check(is_admin)
 async def reset_econemy(interaction: discord.Interaction):
-    global user_balances
-    user_balances.clear()
+    file_path = f"{interaction.guild.id}.json"
+
+    try:
+        with open(file_path, "r") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        data = {}
+
+    data["users"] = {}  # Alle User-Daten löschen
+
+    with open(file_path, "w") as f:
+        json.dump(data, f, indent=4)
 
     embed = discord.Embed(
-        description="🟢 Resetting was successful",
+        description="🟢 Economy wurde erfolgreich zurückgesetzt.",
         color=discord.Color.green()
     )
     await interaction.response.send_message(embed=embed)
-
-@tree.command(name="set-min-bet", description="👑[ADMIN] Set minimum bet (1 - 999)")
-@app_commands.describe(value="New minimum bet (1 - 999)")
-@app_commands.check(is_admin)
-async def set_min_bet(interaction: discord.Interaction, value: int):
-    global MIN_BET
-    if 1 <= value <= 999:
-        MIN_BET = value
-        embed = discord.Embed(
-            description=f"🟢 MIN_BET set to **${MIN_BET}**",
-            color=discord.Color.green()
-        )
-    else:
-        embed = discord.Embed(
-            description="🔴 Value must be between 1 and 999",
-            color=discord.Color.red()
-        )
-    await interaction.response.send_message(embed=embed)
-
+    
 @tree.command(name="set-start-money", description="👑[ADMIN] Set starting balance (10k - 1m)")
 @app_commands.describe(value="New starting balance (10000 - 1000000)")
 @app_commands.check(is_admin)
@@ -994,153 +966,9 @@ async def pray(ctx):
     embed.set_thumbnail(url=ctx.author.avatar.url)
     await ctx.send(embed=embed)
 
-@bot.command()
-async def lottery(ctx):
-    global lottery_active, lottery_data
-
-    now = datetime.utcnow()
-    user_id = ctx.author.id
-
-    if user_id in user_last_lottery and now - user_last_lottery[user_id] < timedelta(days=1):
-        return await ctx.send("🔴 You can only host one daily lottery per day.")
-
-    if lottery_active:
-        return await ctx.send("🔴 A daily lottery is already active. Please wait.")
-
-    # Daten vorbereiten
-    prize = random.randint(1_000_000, 5_000_000)
-    tax = random.randint(5, 12)
-    after_tax = prize - int(prize * tax / 100)
-    ticket_price = int(prize * 0.4)
-
-    lottery_data = {
-        "host": user_id,
-        "prize": prize,
-        "tax": tax,
-        "after_tax": after_tax,
-        "ticket_price": ticket_price,
-        "participants": {},
-        "message": None
-    }
-
-    user_last_lottery[user_id] = now
-    lottery_active = True
-
-    embed = discord.Embed(
-        title="🎰 LOTTERY 🎰",
-        description=(
-            "Lottery begins **Click the menu down below to buy tickets**\n\n"
-            f"**Prize Pool 💸**\n"
-            f"> Total : **${prize}**\n"
-            f"> Taxes : {tax}%\n"
-            f"> After taxes : ${after_tax}\n\n"
-            f"**Ticket info 🎟️**\n"
-            f"> Price : ${ticket_price}\n"
-            f"> Sold : 0\n"
-            f"> Max per Player : 10\n\n"
-            "💡Quick Tip\nluck points won’t affect your win chances"
-        ),
-        color=discord.Color.green()
-    )
-
-    class TicketMenu(discord.ui.Select):
-        def __init__(self):
-            options = [
-                discord.SelectOption(label=f"{i} Ticket(s)", description=f"${i * ticket_price}", value=str(i))
-                for i in range(1, 11)
-            ]
-            super().__init__(placeholder="Select number of tickets to buy", min_values=1, max_values=1, options=options)
-
-        async def callback(self, interaction: discord.Interaction):
-            user = interaction.user
-            amount = int(self.values[0])
-            cost = amount * ticket_price
-
-            user_balances.setdefault(user.id, 10_000_000)
-
-            if user_balances[user.id] < cost:
-                return await interaction.response.send_message("🔴 Not enough balance.", ephemeral=True)
-
-            current = lottery_data["participants"].get(user.id, 0)
-            if current + amount > 10:
-                return await interaction.response.send_message("🔴 Max 10 tickets per player.", ephemeral=True)
-
-            lottery_data["participants"][user.id] = current + amount
-            user_balances[user.id] -= cost
-
-            await interaction.response.send_message(f"✅ Bought {amount} ticket(s) for ${cost}.", ephemeral=True)
-            await update_embed()
-
-    class TicketView(discord.ui.View):
-        def __init__(self):
-            super().__init__(timeout=None)
-            self.add_item(TicketMenu())
-
-    view = TicketView()
-    msg = await ctx.send(embed=embed, view=view)
-    lottery_data["message"] = msg
-
-    await asyncio.sleep(1200)  # 20 Minuten warten
-    await draw_winner(ctx)
-
-async def update_embed():
-    msg = lottery_data["message"]
-    embed = msg.embeds[0]
-    total = sum(lottery_data["participants"].values())
-
-    new_description = embed.description
-    if "> Sold :" in new_description:
-        new_description = '\n'.join([
-            line if not line.startswith("> Sold :") else f"> Sold : {total}"
-            for line in new_description.splitlines()
-        ])
-
-    embed.description = new_description
-    await msg.edit(embed=embed)
-
-
-async def draw_winner(ctx):
-    global lottery_active
-
-    all_entries = []
-    for uid, count in lottery_data["participants"].items():
-        all_entries.extend([uid] * count)
-
-    if not all_entries:
-        await ctx.send("🔴 No participants. Lottery cancelled.")
-        lottery_active = False
-        return
-
-    winner_id = random.choice(all_entries)
-    prize = lottery_data["after_tax"]
-    tax = lottery_data["tax"]
-    total_tickets = sum(lottery_data["participants"].values())
-    winner = await ctx.guild.fetch_member(winner_id)
-
-    user_balances[winner_id] += prize
-
-    embed = discord.Embed(
-        title="🎰 LOTTERY WINNERS 🎰",
-        description=(
-            f"Congratulations to our winner\n\n"
-            f"> Winner : **{winner.display_name}**\n"
-            f"> Price : ${prize}\n"
-            f"> Taxes : {tax}%\n"
-            f"> Date : {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
-            f"> Tickets sold : {total_tickets}\n\n"
-            "Luck points won’t affect your win chances"
-        ),
-        color=discord.Color.gold()
-    )
-
-    await ctx.send(embed=embed)
-    lottery_active = False
-
 @reset_econemy.error
-@set_min_bet.error
 @set_start_money.error
 @clear_cooldowns.error
-@set_minesweeper_lives.error
 async def admin_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.CheckFailure):
         await interaction.response.send_message(
