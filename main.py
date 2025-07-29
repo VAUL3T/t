@@ -1208,31 +1208,30 @@ async def pray(ctx):
 
 @tasks.loop(hours=1)
 async def decay_pet_stats():
-    for guild_id in WHITELISTED_GUILDS:
-        data = load_server_data(guild_id)
-        for user_id, user_data in data.get("users", {}).items():
-            pet = user_data.get("pet")
-            if not pet:
-                continue
+    data = load_data()
+    for user_id, user_data in data.get("users", {}).items():
+        pet = user_data.get("pet")
+        if not pet:
+            continue
 
-            pet["hunger"] = max(pet["hunger"] - random.randint(1, 3), 0)
-            pet["happiness"] = max(pet["happiness"] - random.randint(1, 2), 0)
-            pet["clean"] = max(pet["clean"] - random.randint(1, 3), 0)
+        pet["hunger"] = max(pet["hunger"] - random.randint(1, 3), 0)
+        pet["happiness"] = max(pet["happiness"] - random.randint(1, 2), 0)
+        pet["clean"] = max(pet["clean"] - random.randint(1, 3), 0)
 
-            if pet["hunger"] == 0:
-                try:
-                    user = await bot.fetch_user(int(user_id))
-                    embed = discord.Embed(
-                        description="🔴 Your pet died because you didn’t feed him",
-                        color=discord.Color.red()
-                    )
-                    await user.send(embed=embed)
-                except:
-                    pass
+        if pet["hunger"] == 0:
+            try:
+                user = await bot.fetch_user(int(user_id))
+                embed = discord.Embed(
+                    description="🔴 Your pet died because you didn’t feed him",
+                    color=discord.Color.red()
+                )
+                await user.send(embed=embed)
+            except:
+                pass
 
-                user_data.pop("pet", None)
+            user_data.pop("pet", None)
 
-        save_server_data(guild_id, data)
+    save_data(data)
 
 @reset_econemy.error
 @set_start_money.error
