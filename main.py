@@ -243,6 +243,8 @@ async def beach_help(ctx):
             "> 🥷 Crime : `crime`\n"
             "> Usage : crime\n"
 
+            "> 🐾 Pets : `/pets`\n"
+
             "> 💕 Esex : `esex`\n"
             "> Usage : esex | esex <@user>\n"
 
@@ -699,9 +701,12 @@ class PetSelectView(View):
         super().__init__(timeout=None)
         self.add_item(PetSelect(user_id))
 
-@bot.command()
-async def pet(ctx):
-    pet = get_pet_data(ctx.author.id)
+ 
+@bot.tree.command(name="pet", description="🐾 Manage or Interact with your pets")
+async def pet(interaction: discord.Interaction):
+    user_id = interaction.user.id
+    pet = get_pet_data(user_id)
+
     if not pet:
         embed = discord.Embed(
             title="🐾 Welcome to pet Paradise",
@@ -712,14 +717,14 @@ async def pet(ctx):
                 "🛝 Play with them to keep them happy\n"
                 "💦 Clean them regularly\n"
                 "💪 Work with them to earn money\n\n"
-                "> Warning\n> Pet dies after 2 days without care"
+                "> ⚠️ Warning\n> Pet dies after 2 days without care"
             ),
             color=discord.Color.blurple()
         )
         embed.set_footer(text="well-cared pets can earn you serious money")
-        await ctx.send(embed=embed, view=PetSelectView(ctx.author.id))
+        await interaction.response.send_message(embed=embed, view=PetSelectView(user_id))
     else:
-        await ctx.send(embed=make_pet_embed(ctx.author.id), view=PetView(ctx.author.id))
+        await interaction.response.send_message(embed=make_pet_embed(user_id), view=PetView(user_id))
         
 @bot.command(aliases=["sl"])
 async def slots(ctx, bet: int):
