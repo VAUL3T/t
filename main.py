@@ -44,9 +44,8 @@ payment_lock_until = {}
 @bot.event
 async def on_ready():
     synced = await bot.tree.sync()
+    print("synced cmd")
     decay_pet_stats.start()
-    for cmd in bot.tree.get_commands():
-        print(f"{cmd.name} – {cmd.mention}")
 
 @bot.check
 async def globally_whitelist_guilds(ctx):
@@ -699,30 +698,45 @@ class PetSelectView(View):
         super().__init__(timeout=None)
         self.add_item(PetSelect(user_id))
 
- 
-@bot.tree.command(name="pet", description="🐾 Manage or Interact with your pets")
-async def pet(interaction: discord.Interaction):
-    user_id = interaction.user.id
+@bot.tree.command(name="pet", description="🐾 Manage or view your pets")
+@app_commands.describe(user="View another user's pet")
+async def pet(interaction: discord.Interaction, user: discord.User = None):
+    target_user = user or interaction.user
+    user_id = target_user.id
     pet = get_pet_data(user_id)
 
     if not pet:
+        if user:  # Wenn man anderen User angibt, aber der kein Pet hat
+            return await interaction.response.send_message(
+                embed=discord.Embed(
+                    description=f"{user.mention} has no pet.",
+                    color=discord.Color.red()
+                ),
+                ephemeral=True
+            )
+        # Wenn man selbst kein Pet hat, Auswahlmenü anzeigen
         embed = discord.Embed(
-            title="🐾 Welcome to pet Paradise",
+            title="🐾 Welcome to Pet Paradise",
             description=(
                 "> You don’t have a pet yet!\n> Choose one below to get started\n\n"
-                "🎯 How it works :\n"
+                "🎯 How it works:\n"
                 "🍔 Feed your pet to keep them healthy\n"
                 "🛝 Play with them to keep them happy\n"
                 "💦 Clean them regularly\n"
                 "💪 Work with them to earn money\n\n"
-                "> ⚠️ Warning\n> Pet dies after 2 days without care"
+                "> ⚠️ Pet dies after 2 days without care"
             ),
             color=discord.Color.blurple()
         )
         embed.set_footer(text="well-cared pets can earn you serious money")
-        await interaction.response.send_message(embed=embed, view=PetSelectView(user_id))
-    else:
-        await interaction.response.send_message(embed=make_pet_embed(user_id), view=PetView(user_id))
+        return await interaction.response.send_message(embed=embed, view=PetSelectView(user_id))
+
+    # Wenn Pet existiert
+    embed = make_pet_embed(user_id)
+    if user:  # Wenn ein anderer User angegeben ist → nur Embed, keine Buttons
+        await interaction.response.send_message(embed=embed)
+    else:     # Wenn kein User angegeben → eigene Buttons
+        await interaction.response.send_message(embed=embed, view=PetView(user_id))
         
 @bot.command(aliases=["sl"])
 async def slots(ctx, bet: int):
