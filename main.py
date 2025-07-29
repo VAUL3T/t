@@ -588,6 +588,64 @@ class PetView(View):
         set_pet_data(self.user_id, pet)
         await interaction.response.edit_message(embed=make_pet_embed(self.user_id), view=self)
 
+    @discord.ui.button(label="⚙️ Change Pet ", style=discord.ButtonStyle.red)
+    async def settings(self, interaction, button):
+        pet = get_pet_data(self.user_id)
+        if not pet:
+            return await interaction.response.send_message("You have no pet to manage.", ephemeral=True)
+        embed = discord.Embed(
+            title="Are you sure you want to delete your pet?",
+            description=(
+                "**This will delete:**\n"
+                "• All pet stats and progress\n"
+                f"• Level {pet.get('level', 1)}\n\n"
+                "After deletion, you can adopt a new pet.\n"
+                "You lose **$1000**"
+            ),
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, view=ConfirmDeletePetView(self.user_id), ephemeral=True)
+
+class ConfirmDeletePetView(View):
+    def __init__(self, user_id):
+        super().__init__(timeout=60)
+        self.user_id = user_id
+
+    @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.red)
+    async def confirm(self, interaction, button):
+        data = load_data()
+        user_data = data["users"].get(str(self.user_id), {})
+        balance = user_data.get("balance", 0)
+
+        if balance < 1000:
+            await interaction.response.edit_message(
+                embed=discord.Embed(
+                    description="🔴 You don’t have enough money",
+                    color=discord.Color.red()
+                ),
+                view=None
+            )
+            return
+
+        # 1000$ abziehen und pet löschen
+        user_data["balance"] -= 1000
+        user_data.pop("pet", None)
+        save_data(data)
+
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                description="🟢 Your pet has been deleted. You can now adopt a new one.",
+                color=discord.Color.green()
+            ),
+            view=None
+        )
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.gray)
+    async def cancel(self, interaction, button):
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
+        
 def make_pet_embed(user_id):
     pet = get_pet_data(user_id)
     if not pet:
@@ -640,8 +698,8 @@ class PetSelectView(View):
         super().__init__(timeout=None)
         self.add_item(PetSelect(user_id))
 
-@commands.command(name="pet")
-async def pet_command(ctx):
+@bot.command()
+async def pet(ctx):
     pet = get_pet_data(ctx.author.id)
     if not pet:
         embed = discord.Embed(
