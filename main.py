@@ -706,7 +706,7 @@ async def pet(interaction: discord.Interaction, user: discord.User = None):
     pet = get_pet_data(user_id)
 
     if not pet:
-        if user:  # Wenn man anderen User angibt, aber der kein Pet hat
+        if user and user.id != interaction.user.id:
             return await interaction.response.send_message(
                 embed=discord.Embed(
                     description=f"{user.mention} has no pet.",
@@ -714,7 +714,7 @@ async def pet(interaction: discord.Interaction, user: discord.User = None):
                 ),
                 ephemeral=True
             )
-        # Wenn man selbst kein Pet hat, Auswahlmenü anzeigen
+        # Du selbst hast kein Pet → Auswahl anzeigen
         embed = discord.Embed(
             title="🐾 Welcome to Pet Paradise",
             description=(
@@ -729,15 +729,19 @@ async def pet(interaction: discord.Interaction, user: discord.User = None):
             color=discord.Color.blurple()
         )
         embed.set_footer(text="well-cared pets can earn you serious money")
-        return await interaction.response.send_message(embed=embed, view=PetSelectView(user_id))
+        return await interaction.response.send_message(embed=embed, view=PetSelectView(interaction.user.id))
 
-    # Wenn Pet existiert
+    # Pet existiert
     embed = make_pet_embed(user_id)
-    if user:  # Wenn ein anderer User angegeben ist → nur Embed, keine Buttons
-        await interaction.response.send_message(embed=embed)
-    else:     # Wenn kein User angegeben → eigene Buttons
-        await interaction.response.send_message(embed=embed, view=PetView(user_id))
-        
+    
+    # Wenn anderer User angegeben ist → Embed ohne Buttons + Footer
+    if user and user.id != interaction.user.id:
+        embed.set_footer(text=f"👀 Viewing {user.mention}’s pet | Use /pet to adopt your own companion")
+        return await interaction.response.send_message(embed=embed)
+
+    # Ansonsten: eigenes Pet → Embed mit Buttons
+    await interaction.response.send_message(embed=embed, view=PetView(user_id))
+    
 @bot.command(aliases=["sl"])
 async def slots(ctx, bet: int):
     user_id = ctx.author.id
