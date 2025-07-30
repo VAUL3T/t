@@ -877,9 +877,9 @@ async def esex(ctx, member: discord.Member = None):
     )
     await ctx.send(embed=embed)
 
-@bot.command()
-async def work(ctx):
-    user_id = ctx.author.id
+@bot.tree.command(name="work", description="💼 Work and earn some money")
+async def work(interaction: discord.Interaction):
+    user_id = interaction.user.id
     now = time.time()
     cooldown_time = 12 * 60  # 12 Minuten
 
@@ -895,8 +895,9 @@ async def work(ctx):
             description=f"🕒 You must wait **{time_str}** before working again",
             color=discord.Color.orange()
         )
-        return await ctx.send(embed=embed)
+        return await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    # Arbeitszeit + Belohnung
     hours = random.randint(6, 12)
     amount = random.randint(5000, 12000)
 
@@ -907,7 +908,7 @@ async def work(ctx):
         description=f"🟢 You worked for {hours}h and earned **${amount:,}**",
         color=discord.Color.green()
     )
-    await ctx.send(embed=embed)
+    await interaction.response.send_message(embed=embed)
 
 @bot.command()
 async def crime(ctx):
@@ -1194,31 +1195,49 @@ async def roulette(ctx, bet: int):
 
     await ctx.send(embed=embed)
 
-@bot.command(aliases=["lb"])
-async def leaderboard(ctx):
-    user_id = ctx.author.id
-    sorted_users = sorted(user_balances.items(), key=lambda x: x[1], reverse=True)
-    
+
+@bot.tree.command(name="leaderboard", description="🏆 View the richest users")
+async def leaderboard(interaction: discord.Interaction):
+    data = load_data()
+    all_users = data.get("users", {})
+    user_id = interaction.user.id
+
+    # Kombiniere Wallet + Bank
+    leaderboard_data = []
+    for uid_str, info in all_users.items():
+        uid = int(uid_str)
+        wallet = info.get("balance", 0)
+        bank = info.get("bank", 0)
+        total = wallet + bank
+        leaderboard_data.append((uid, total))
+
+    # Sortiere nach Gesamtsumme
+    sorted_users = sorted(leaderboard_data, key=lambda x: x[1], reverse=True)
+
     embed = discord.Embed(
         title="🏆 Leaderboard",
         color=discord.Color.gold()
     )
 
     # Top 10 anzeigen
-    for idx, (uid, bal) in enumerate(sorted_users[:10], start=1):
-        user = await bot.fetch_user(uid)
+    for idx, (uid, total_bal) in enumerate(sorted_users[:10], start=1):
+        try:
+            user = await bot.fetch_user(uid)
+            name = user.name
+        except:
+            name = f"User {uid}"
         embed.add_field(
-            name=f"[ {idx} ] {user.name}",
-            value=f"**${bal:,}**",
+            name=f"[ {idx} ] {name}",
+            value=f"**${total_bal:,}**",
             inline=False
         )
 
-    # Eigene Platzierung suchen
+    # Eigene Platzierung finden
     user_rank = next((i + 1 for i, (uid, _) in enumerate(sorted_users) if uid == user_id), None)
-    current_date = datetime.now().strftime("%-m/%-d/%y")  # z. B. 7/27/25
-
+    current_date = datetime.now().strftime("%-m/%-d/%y")  # e.g., 7/29/25
     embed.set_footer(text=f"Your global rank : #{user_rank} | {current_date}")
-    await ctx.send(embed=embed)
+
+    await interaction.response.send_message(embed=embed)
     
 @bot.command()
 async def pray(ctx):
