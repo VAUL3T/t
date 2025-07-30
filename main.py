@@ -148,6 +148,19 @@ def get_age_hours(pet):
     created = datetime.fromtimestamp(pet["created"])
     return int((datetime.utcnow() - created).total_seconds() // 3600)
 
+def contains_emoji(text):
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"
+        "\U0001F300-\U0001F5FF"
+        "\U0001F680-\U0001F6FF"
+        "\U0001F1E0-\U0001F1FF"
+        "\U00002700-\U000027BF"
+        "\U000024C2-\U0001F251"
+        "]+", flags=re.UNICODE
+    )
+    return emoji_pattern.search(text)
+
 last_pet_actions = {}
 
 @tree.command(name="clear_cooldowns", description="👑[ADMIN] Clear all cooldowns")
@@ -664,8 +677,9 @@ def make_pet_embed(user_id):
 
     age = get_age_hours(pet)
     emoji = get_pet_emoji(pet["type"])
+    name = pet.get("name", pet["type"]) 
     embed = discord.Embed(
-        title=f"{emoji} {pet['type']}",
+        title=f"{emoji} {name}",
         description=(
             f"> Level : {pet['level']}\n"
             f"> Age   : {age}h\n\n"
@@ -679,16 +693,31 @@ def make_pet_embed(user_id):
     embed.set_footer(text="💰Keep all stats above 80 for ENHANCED EARNINGS")
     return embed
 
-class PetSelect(Select):
-    def __init__(self, user_id):
-        options = [discord.SelectOption(label=pet, emoji=get_pet_emoji(pet)) for pet in ["Dog", "Cat", "Rabbit", "Hamster"]]
-        super().__init__(placeholder="🐾 Select your pet type", options=options)
-        self.user_id = user_id
+class PetNameModal(discord.ui.Modal, title="🐾 Name your pet"):
+    pet_name = discord.ui.TextInput(
+        label="Pet Name",
+        placeholder="Max 10 chars, no emojis",
+        max_length=10
+    )
 
-    async def callback(self, interaction):
-        selected = self.values[0]
+    def __init__(self, user_id, pet_type):
+        super().__init__()
+        self.user_id = user_id
+        self.pet_type = pet_type
+
+    async def on_submit(self, interaction: discord.Interaction):
+        name = self.pet_name.value.strip()
+
+        if not name or contains_emoji(name):
+            return await interaction.response.send_message(
+                "❌ Invalid name. Use up to 10 **normal** characters, no emojis.",
+                ephemeral=True
+            )
+
+        # Speichere das Haustier
         pet_data = {
-            "type": selected,
+            "type": self.pet_type,
+            "name": name,
             "level": 1,
             "hunger": 50,
             "happiness": 50,
@@ -697,17 +726,31 @@ class PetSelect(Select):
             "created": datetime.utcnow().timestamp()
         }
         set_pet_data(self.user_id, pet_data)
+
         await interaction.response.edit_message(
             embed=discord.Embed(
-                title=f"You’ve adopted a wonderful {selected}",
-                description="🍔 Feed your pet to keep them healthy\n🛝 Play with them to keep them happy\n💦 Clean them regularly\n💪 Work with them to earn money",
+                title=f"You’ve adopted a wonderful {self.pet_type}",
+                description=(
+                    "🍔 Feed your pet to keep them healthy\n"
+                    "🛝 Play with them to keep them happy\n"
+                    "💦 Clean them regularly\n"
+                    "💪 Work with them to earn money\n\n"
+                    "Run /pet again to manage your companion"
+                ),
                 color=discord.Color.green()
-            ), view=None)
+            ),
+            view=None
+        )
 
-class PetSelectView(View):
+class PetSelect(Select):
     def __init__(self, user_id):
-        super().__init__(timeout=None)
-        self.add_item(PetSelect(user_id))
+        options = [discord.SelectOption(label=pet, emoji=get_pet_emoji(pet)) for pet in ["Dog", "Cat", "Rabbit", "Hamster"]]
+        super().__init__(placeholder="🐾 Select your pet type", options=options)
+        self.user_id = user_id
+
+    async def callback(self, interaction: discord.Interaction):
+        selected = self.values[0]
+        await interaction.response.send_modal(PetNameModal(self.user_id, selected))
 
 @bot.tree.command(name="pet", description="🐾 Manage or view your pets")
 @app_commands.describe(user="View another user's pet")
@@ -747,7 +790,7 @@ async def pet(interaction: discord.Interaction, user: discord.User = None):
     
     # Wenn anderer User angegeben ist → Embed ohne Buttons + Footer
     if user and user.id != interaction.user.id:
-        embed.set_footer(text=f"👀 Viewing {user.mention}’s pet | Use /pet to adopt your own companion")
+        embed.set_footer(text=f"👀 Viewing {user.name}’s pet | Use /pet to adopt your own companion")
         return await interaction.response.send_message(embed=embed)
 
     # Ansonsten: eigenes Pet → Embed mit Buttons
