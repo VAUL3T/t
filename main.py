@@ -23,6 +23,7 @@ DATA_FILE = "1345476135487672350.json"
 bot = commands.Bot(command_prefix='beach ', help_command=None, intents=intents)
 tree = bot.tree
 PET_FILE = "1345476135487672350.json"
+MAX_BANK = 1_000_000_000
 PET_ACTION_COOLDOWN = 300  # 5 Min
 WORK_COOLDOWN = 1800     
 user_balances = {}
@@ -68,8 +69,18 @@ def save_data(data):
 
 def is_admin(interaction: discord.Interaction):
     return interaction.user.guild_permissions.administrator
-    
 
+def get_bank(user_id):
+    data = load_data()
+    user = data["users"].setdefault(str(user_id), {})
+    return user.get("bank", 0)
+
+def update_bank(user_id, amount):
+    data = load_data()
+    user = data["users"].setdefault(str(user_id), {})
+    user["bank"] = user.get("bank", 0) + amount
+    save_data(data)
+    
 def get_balance(user_id):
     data = load_data()
     user = data["users"].setdefault(str(user_id), {})
@@ -1036,57 +1047,89 @@ async def pay(ctx, member: discord.Member, amount: int):
         color=discord.Color.green()
     )
     await ctx.send(embed=embed)
+    
+@bot.tree.command(name="balance", description="💰 Shows your balance")
+@app_commands.describe(user="View another user's balance")
+async def balance(interaction: discord.Interaction, user: discord.User = None):
+    target = user or interaction.user
+    user_id = target.id
 
-@bot.command(aliases=["bal"])
-async def balance(ctx, *, target_arg: typing.Optional[str] = None):
-    target = ctx.author
-
-    if target_arg:
-        # Wenn Mention vorhanden, nimm Mention
-        if ctx.message.mentions:
-            target = ctx.message.mentions[0]
-        else:
-            # Falls nur eine User-ID gegeben ist
-            if target_arg.isdigit():
-                user_id = int(target_arg)
-                member = ctx.guild.get_member(user_id)
-                if member:
-                    target = member
-                else:
-                    try:
-                        # Fallback: User holen (auch wenn nicht im Server sichtbar)
-                        user = await bot.fetch_user(user_id)
-                        target = user
-                    except:
-                        pass 
-
-            if isinstance(target, discord.User) and target == ctx.author:
-                lower_arg = target_arg.lower()
-                matched = discord.utils.find(
-                    lambda m: lower_arg in m.name.lower() or lower_arg in m.display_name.lower(),
-                    ctx.guild.members
-                )
-                if matched:
-                    target = matched
-                else:
-                    embed = discord.Embed(
-                        description=f"🔴 No user found matching `{target_arg}`.",
-                        color=discord.Color.red()
-                    )
-                    return await ctx.send(embed=embed)
-
-    balance = get_balance(target.id)
-    desc = (
-        f"Your current balance is **${balance}**"
-        if target == ctx.author
-        else f"**{getattr(target, 'display_name', target.name)}**'s current balance is **${balance}**"
-    )
+    wallet = get_balance(user_id)
+    bank = get_bank(user_id)
 
     embed = discord.Embed(
-        description=desc,
-        color=discord.Color.blue()
+        description=(
+            f"💳 **Wallet balance**\n"
+            f"${wallet:,}\n\n"
+            f"🏦 **Bank balance**\n"
+            f"${bank:,} / 1.0B"
+        ),
+        color=discord.Color.green()
     )
-    await ctx.send(embed=embed)
+
+    if user and user.id != interaction.user.id:
+        embed.set_footer(text=f"👀 Viewing {user.name}’s balance")
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="deposit", description="🏦 Deposit money into your bank")
+@app_commands.describe(amount="Amount to deposit")
+async def deposit(interaction: discord.Interaction, amount: int):
+    user_id = interaction.user.id
+    wallet = get_balance(user_id)
+    bank = get_bank(user_id)
+
+    if amount <= 0:
+        return await interaction.response.send_message(
+            embed=discord.Embed(description="🔴 You need to deposit at least **$1**", color=discord.Color.red()),
+            ephemeral=True
+        )
+
+    if wallet < amount:
+        return await interaction.response.send_message(
+            embed=discord.Embed(description="🔴 You don’t have that much in your wallet", color=discord.Color.red()),
+            ephemeral=True
+        )
+
+    if bank + amount > MAX_BANK:
+        return await interaction.response.send_message(
+            embed=discord.Embed(description="🔴 That exceeds the bank limit", color=discord.Color.red()),
+            ephemeral=True
+        )
+
+    update_balance(user_id, -amount)
+    update_bank(user_id, amount)
+
+    await interaction.response.send_message(
+        f"✅ Deposited ${amount:,} into your bank!",
+        ephemeral=True
+    )
+
+@bot.tree.command(name="withdraw", description="💳 Withdraw money from your bank")
+@app_commands.describe(amount="Amount to withdraw")
+async def withdraw(interaction: discord.Interaction, amount: int):
+    user_id = interaction.user.id
+    bank = get_bank(user_id)
+
+    if amount <= 0:
+        return await interaction.response.send_message(
+            embed=discord.Embed(description="🔴 You need to withdraw at least **$1**", color=discord.Color.red()),
+            ephemeral=True
+        )
+
+    if bank < amount:
+        return await interaction.response.send_message(
+            embed=discord.Embed(description="🔴 You don’t have that much money in your bank", color=discord.Color.red()),
+            ephemeral=True
+        )
+
+    update_bank(user_id, -amount)
+    update_balance(user_id, amount)
+
+    await interaction.response.send_message(
+        f"✅ Withdrew ${amount:,} into your wallet!",
+        ephemeral=True
+    )
 
 @bot.command(aliases=["rl"])
 async def roulette(ctx, bet: int):
