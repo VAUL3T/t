@@ -25,8 +25,8 @@ bot = commands.Bot(command_prefix='beach ', help_command=None, intents=intents)
 tree = bot.tree
 PET_FILE = "1345476135487672350.json"
 MAX_BANK = 1_000_000_000
-PET_ACTION_COOLDOWN = 300  # 5 Min
-WORK_COOLDOWN = 1800     
+PET_ACTION_COOLDOWN = 120  # 5 Min
+WORK_COOLDOWN = 300    
 user_balances = {}
 user_last_lottery = {}
 lottery_data = {}
