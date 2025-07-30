@@ -752,6 +752,11 @@ class PetSelect(Select):
         selected = self.values[0]
         await interaction.response.send_modal(PetNameModal(self.user_id, selected))
 
+class PetSelectView(View):
+    def __init__(self, user_id):
+        super().__init__(timeout=None)
+        self.add_item(PetSelect(user_id))
+
 @bot.tree.command(name="pet", description="🐾 Manage or view your pets")
 @app_commands.describe(user="View another user's pet")
 async def pet(interaction: discord.Interaction, user: discord.User = None):
