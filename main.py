@@ -164,7 +164,7 @@ def contains_emoji(text):
 
 last_pet_actions = {}
 
-@tree.command(name="clear_cooldowns", description="👑[ADMIN] Clear all cooldowns")
+@tree.command(name="clear_cooldowns", description="[ADMIN] Clear all cooldowns")
 @app_commands.check(is_admin)
 async def clear_cooldowns(interaction: discord.Interaction):
     global last_pray_time, robbery_cooldowns, work_cooldowns
@@ -184,7 +184,7 @@ async def clear_cooldowns(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed)
 
-@tree.command(name="reset-econemy", description="👑[ADMIN] Reset player balances")
+@tree.command(name="reset-econemy", description="[ADMIN] Reset player balances")
 @app_commands.check(is_admin)
 async def reset_econemy(interaction: discord.Interaction):
     file_path = f"{interaction.guild.id}.json"
@@ -206,7 +206,7 @@ async def reset_econemy(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed)
     
-@tree.command(name="set-start-money", description="👑[ADMIN] Set starting balance (10k - 1m)")
+@tree.command(name="set-start-money", description="[ADMIN] Set starting balance (10k - 1m)")
 @app_commands.describe(value="New starting balance (10000 - 1000000)")
 @app_commands.check(is_admin)
 async def set_start_money(interaction: discord.Interaction, value: int):
@@ -758,7 +758,7 @@ class PetSelectView(View):
         super().__init__(timeout=None)
         self.add_item(PetSelect(user_id))
 
-@bot.tree.command(name="pet", description="🐾 Manage or view your pets")
+@bot.tree.command(name="pet", description="Manage or view your pets")
 @app_commands.describe(user="View another user's pet")
 async def pet(interaction: discord.Interaction, user: discord.User = None):
     target_user = user or interaction.user
@@ -926,7 +926,7 @@ async def esex(ctx, member: discord.Member = None):
     )
     await ctx.send(embed=embed)
 
-@bot.tree.command(name="work", description="💼 Work and earn some money")
+@bot.tree.command(name="work", description="Work and earn some money")
 async def work(interaction: discord.Interaction):
     user_id = interaction.user.id
     now = time.time()
@@ -1098,7 +1098,7 @@ async def pay(ctx, member: discord.Member, amount: int):
     )
     await ctx.send(embed=embed)
     
-@bot.tree.command(name="balance", description="💰 Shows your balance")
+@bot.tree.command(name="balance", description="Shows your balance")
 @app_commands.describe(user="View another user's balance")
 async def balance(interaction: discord.Interaction, user: discord.User = None):
     target = user or interaction.user
@@ -1122,7 +1122,7 @@ async def balance(interaction: discord.Interaction, user: discord.User = None):
 
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="deposit", description="🏦 Deposit money into your bank")
+@bot.tree.command(name="deposit", description="Deposit money into your bank")
 @app_commands.describe(amount="Amount to deposit")
 async def deposit(interaction: discord.Interaction, amount: int):
     user_id = interaction.user.id
@@ -1155,7 +1155,7 @@ async def deposit(interaction: discord.Interaction, amount: int):
         ephemeral=True
     )
 
-@bot.tree.command(name="withdraw", description="💳 Withdraw money from your bank")
+@bot.tree.command(name="withdraw", description="Withdraw money from your bank")
 @app_commands.describe(amount="Amount to withdraw")
 async def withdraw(interaction: discord.Interaction, amount: int):
     user_id = interaction.user.id
@@ -1245,7 +1245,7 @@ async def roulette(ctx, bet: int):
     await ctx.send(embed=embed)
 
 
-@bot.tree.command(name="leaderboard", description="🏆 View the richest users")
+@bot.tree.command(name="leaderboard", description="View the richest users")
 async def leaderboard(interaction: discord.Interaction):
     data = load_data()
     all_users = data.get("users", {})
@@ -1348,10 +1348,29 @@ async def decay_pet_stats():
         if pet["hunger"] == 0:
             try:
                 user = await bot.fetch_user(int(user_id))
+
+                pet_type = pet.get("type", "Pet")
+                level = pet.get("level", 1)
+                earnings = pet.get("earned", 0)
+                emoji = pet.get("emoji", "🐾")
+                creation_time = pet.get("created_at", time.time())
+                total_hours = int((time.time() - creation_time) // 3600)
+
                 embed = discord.Embed(
-                    description="🔴 Your pet died because you didn’t feed him",
-                    color=discord.Color.red()
+                    title=f"💀 {pet_type} Has Passed Away 💀",
+                    description=(
+                        f"After **{total_hours}h**, your {pet_type} has passed away because of neglect\n\n"
+                        f"{emoji} **Final Stats** :\n"
+                        f"• **Level** : {level}\n"
+                        f"• **Lifetime Earnings** : **${earnings:,}**\n\n"
+                        f"💔 **What happened ?**\n"
+                        f"• **Cause of death** : Neglect\n"
+                        f"• **Prevention** : Regular feeding and care\n"
+                        f"• **Lesson** : Pets need consistent care"
+                    ),
+                    color=discord.Color.dark_red()
                 )
+                embed.set_footer(text="💕 Take better care of your companion next time to prevent this tragedy")
                 await user.send(embed=embed)
             except:
                 pass
