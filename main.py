@@ -5,6 +5,7 @@ import random
 import os
 import json
 import typing
+import re
 import time
 import asyncio
 from discord import app_commands
