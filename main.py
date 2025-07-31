@@ -1362,14 +1362,12 @@ async def roulette(ctx, bet: int):
 
     await ctx.send(embed=embed)
 
-
 @bot.tree.command(name="leaderboard", description="View the richest users")
 async def leaderboard(interaction: discord.Interaction):
     data = load_data()
     all_users = data.get("users", {})
     user_id = interaction.user.id
 
-    # Kombiniere Wallet + Bank
     leaderboard_data = []
     for uid_str, info in all_users.items():
         uid = int(uid_str)
@@ -1378,30 +1376,28 @@ async def leaderboard(interaction: discord.Interaction):
         total = wallet + bank
         leaderboard_data.append((uid, total))
 
-    # Sortiere nach Gesamtsumme
     sorted_users = sorted(leaderboard_data, key=lambda x: x[1], reverse=True)
 
-    embed = discord.Embed(
-        title="🏆 Leaderboard",
-        color=discord.Color.gold()
-    )
-
-    # Top 10 anzeigen
+    description_lines = []
     for idx, (uid, total_bal) in enumerate(sorted_users[:10], start=1):
         try:
             user = await bot.fetch_user(uid)
             name = user.name
         except:
             name = f"User {uid}"
-        embed.add_field(
-            name=f"[ {idx} ] {name}",
-            value=f"**${total_bal:,}**",
-            inline=False
-        )
+        # Eine Zeile mit Position, Name, fett formatiertem Geld
+        description_lines.append(f"[ {idx} ] {name} **${total_bal:,}**")
 
-    # Eigene Platzierung finden
+    description = "\n".join(description_lines)
+
     user_rank = next((i + 1 for i, (uid, _) in enumerate(sorted_users) if uid == user_id), None)
-    current_date = datetime.now().strftime("%-m/%-d/%y")  # e.g., 7/29/25
+    current_date = datetime.now().strftime("%-m/%-d/%y")  # z.B. 7/29/25
+
+    embed = discord.Embed(
+        title="🏆 Leaderboard",
+        description=description,
+        color=discord.Color.gold()
+    )
     embed.set_footer(text=f"Your global rank : #{user_rank} | {current_date}")
 
     await interaction.response.send_message(embed=embed)
