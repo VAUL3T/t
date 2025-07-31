@@ -296,6 +296,115 @@ async def beach_help(ctx):
     )
 
     await ctx.send(embed=embed)
+
+class MineButton(Button):
+    def __init__(self, x, y, parent_view):
+        super().__init__(label="⛏️", style=discord.ButtonStyle.gray, row=y)
+        self.x = x
+        self.y = y
+        self.parent_view = parent_view
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.disabled or self.parent_view.finished:
+            return
+
+        self.disabled = True
+        self.parent_view.mined += 1
+
+        ore, rarity, value = self.parent_view.get_ore()
+        update_balance(interaction.user.id, value)
+        self.label = ore
+        self.style = discord.ButtonStyle.green
+
+        if rarity in ["Rare", "Very Rare", "Ultra Rare"]:
+            self.parent_view.combo += 1
+        else:
+            self.parent_view.combo = 0
+
+        combo_bonus = 0
+        if self.parent_view.combo >= 3:
+            combo_bonus = 500 * self.parent_view.combo
+            update_balance(interaction.user.id, combo_bonus)
+            self.parent_view.total_earned += combo_bonus
+
+        self.parent_view.total_earned += value
+        self.parent_view.latest_find = (ore, rarity, value + combo_bonus)
+
+        if self.parent_view.mined == 20:
+            self.parent_view.finished = True
+            for child in self.parent_view.children:
+                child.disabled = True
+
+        await interaction.response.edit_message(embed=self.parent_view.make_embed(), view=self.parent_view)
+
+class MineView(View):
+    def __init__(self, user_id):
+        super().__init__(timeout=None)
+        self.user_id = user_id
+        self.mined = 0
+        self.combo = 0
+        self.total_earned = 0
+        self.latest_find = None
+        self.finished = False
+        self.luck = get_luck_bonus(user_id)
+
+        for y in range(4):
+            for x in range(5):
+                self.add_item(MineButton(x, y, self))
+
+    def get_ore(self):
+        roll = random.randint(1, 100) + int(self.luck / 5)
+
+        if roll <= 60:
+            return "🪨", "Common", 500
+        elif roll <= 85:
+            return "💸", "Rare", 1000
+        elif roll <= 97:
+            return "💎", "Very Rare", random.randint(1500, 2000)
+        else:
+            return "👑", "Ultra Rare", random.randint(2000, 2500)
+
+    def make_embed(self):
+        embed = discord.Embed(
+            title="Mining Session" if self.mined else "Mining Started",
+            description="Click the buttons below to mine for valuable ores" if self.mined == 0 else self.mined_text(),
+            color=discord.Color.gold()
+        )
+
+        if self.mined == 0:
+            embed.add_field(name="💡 Quick Tip", value="Get more luck using - **beach pray**", inline=False)
+
+        if self.finished:
+            embed.title = "⛏️ Mining Complete"
+            embed.set_footer(text=f"You've mined all 20 spots!")
+
+        else:
+            embed.set_footer(text="Click the pickaxe buttons to mine for Ores")
+
+        return embed
+
+    def mined_text(self):
+        ore, rarity, value = self.latest_find
+        progress_bar = pet_progress_bar(int((self.mined / 20) * 100))
+
+        return (
+            f"**Latest Find**\n"
+            f"{ore} • {rarity}\n"
+            f"Value : ${value:,}\n\n"
+            f"**Session Stats**\n"
+            f"Total Earnings : ${self.total_earned:,}\n"
+            f"Combo : x{self.combo}\n\n"
+            f"**Progress**\n"
+            f"{self.mined}/20 spots mined ({int((self.mined / 20) * 100)}%)\n"
+            f"{progress_bar}"
+        )
+
+@tree.command(name="mine", description="Start mining for valuable ores!")
+async def mine(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        embed=MineView(interaction.user.id).make_embed(),
+        view=MineView(interaction.user.id)
+    )
     
 @bot.command(aliases=["ms"])
 async def minesweeper(ctx):
