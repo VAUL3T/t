@@ -353,16 +353,22 @@ class MineView(View):
                 self.add_item(MineButton(x, y, self))
 
     def get_ore(self):
-        roll = random.randint(1, 100) + int(self.luck / 5)
+        roll = random.randint(1, 1000) + int(self.luck / 3)
 
-        if roll <= 60:
+        if roll <= 600:
             return "🪨", "Common", 500
-        elif roll <= 85:
+        elif roll <= 850:
             return "💸", "Rare", 1000
-        elif roll <= 97:
+        elif roll <= 970:
             return "💎", "Very Rare", random.randint(1500, 2000)
-        else:
+        elif roll <= 990:
             return "👑", "Ultra Rare", random.randint(2000, 2500)
+        elif roll <= 998:
+            return "⭐️", "Ultra Rare", random.randint(2000, 3000)
+        elif roll <= 999:
+            return "🌟", "Mythic", 1_000_000
+        else:
+            return "🔮", "Legendary", random.randint(2_000_000, 3_000_000)
 
     def make_embed(self):
         embed = discord.Embed(
@@ -399,6 +405,9 @@ class MineView(View):
             f"{progress_bar}"
         )
 
+    async def interaction_check(self, interaction):
+        return interaction.user.id == self.user_id
+        
 @tree.command(name="mine", description="Start mining for valuable ores!")
 async def mine(interaction: discord.Interaction):
     await interaction.response.send_message(
