@@ -1269,8 +1269,11 @@ async def deposit(interaction: discord.Interaction, amount: int):
     update_bank(user_id, amount)
 
     await interaction.response.send_message(
-        f"✅ Deposited ${amount:,} into your bank!",
-        ephemeral=True
+        embed=discord.Embed(
+            description=f"🟢 Deposited **${amount:,}** to your bank",
+            color=discord.Color.green()
+        ),
+        ephemeral=False
     )
 
 @bot.tree.command(name="withdraw", description="Withdraw money from your bank")
@@ -1295,7 +1298,10 @@ async def withdraw(interaction: discord.Interaction, amount: int):
     update_balance(user_id, amount)
 
     await interaction.response.send_message(
-        f"✅ Withdrew ${amount:,} into your wallet!",
+        embed=discord.Embed(
+            description=f"🟢 Withdrew **${amount:,}** to your wallet",
+            color=discord.Color.green()
+        ),
         ephemeral=True
     )
 
