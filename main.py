@@ -1461,7 +1461,7 @@ async def decay_pet_stats():
         if not pet:
             continue
 
-        pet["hunger"] = max(pet["hunger"] - random.randint(1, 3), 0)
+        pet["hunger"] = max(pet["hunger"] - random.randint(2, 4), 0)
         pet["happiness"] = max(pet["happiness"] - random.randint(1, 2), 0)
         pet["clean"] = max(pet["clean"] - random.randint(1, 3), 0)
 
